@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 
 from math import isnan
 
+from pandas import read_csv
 
 class HNC_solver():
     def __init__(self, N_species, Gamma, rho, kappa = 1.0, kappa_multiscale = 1.0, tol=1e-4, num_iterations=1000, R_max=25.0, N_bins=50, names=None):
@@ -28,8 +29,56 @@ class HNC_solver():
             self.names=names
             self.make_name_matrix()
 
+    @staticmethod
+    def Bridge_function_OCP(x, Gamma ):
+        """
+        Computes OCP bridge function from 
+
+        "Bridge functions and improvement on the hypernetted-chain approximation for classical one-component plasmas"
+        by Hiroshi Iyetomi, Shuji Ogata, and Setsuo Ichimaru
+        PHYSICAL REVIEW A VOLUME 46, NUMBER 2 15 JULY 1992
+
+        Args:
+            x: r/r_s radius over wigner-seitz ion sphere radius
+            Gamma: Γ strong coupling parameter
+        Returns:
+            B_OCP(r)
+        """
+        b0 = 0.258 - 0.0612 *np.log(Gamma) + 0.0123*np.log(Gamma)**2 - 1/Gamma
+        b1 = 0.0269 + 0.0318* np.log(Gamma) + 0.00814*np.log(Gamma)**2
+
+        c1 =  0.498 - 0.280 *np.log(Gamma) + 0.0294 *np.log(Gamma)**2
+        c2 = -0.412 + 0.219 *np.log(Gamma) - 0.0251 *np.log(Gamma)**2
+        c3 = 0.0988 - 0.0534*np.log(Gamma) + 0.00682*np.log(Gamma)**2
+
+        B_r = Gamma* (  -b0 + c1*x**4  + c2*x**6 + c3*x**8 )*np.exp(-b1/b0 * x**2) 
+        return B_r
+
+    @classmethod
+    def Bridge_function_Yukawa(cls, x, Gamma, kappa ):
+        """
+        Computes Yukawa bridge function from 
+
+        "Empirical bridge function for strongly coupled Yukawa systems"
+        by William Daughton, Michael S. Murillo, and Lester Thode
+        PHYSICAL REVIEW E VOLUME 61, NUMBER 2 FEBRUARY 2000
+
+        Args:
+            x: r/r_s radius over wigner-seitz ion sphere radius
+            Gamma: Γ strong coupling parameter
+            kappa: screening parameter (unitless since a/λs) 
+        Returns:
+            B_Yuk(r)
+        """
+        
+        B_OCP_r = cls.Bridge_function_OCP(x, Gamma)
+        B_Yuk_r = B_OCP_r*np.exp(-kappa**2/4)
+        return B_Yuk_r
+
+
     def make_name_matrix(self):
         self.name_matrix = [[f'{a}-{b}' if a != b else a for b in self.names] for a in self.names]
+
 
 
     def initialize(self):
@@ -181,10 +230,14 @@ class HNC_solver():
         self.h_list = []
         while not converged and iteration < self.num_iterations:
             # Compute matrices in k-space using OZ equation
-            self.get_γs_k_matrix()                           # 1. c_k, u_l_k -> γ_k   (Definition)
-            self.γs_r_matrix = self.FT_k_2_r_matrix(self.γs_k_matrix) # γ_k        -> γ_r   (FT)     
-            self.h_r_matrix = -1 + np.exp(self.γs_r_matrix - self.βu_s_r_matrix) # 2. γ_r,u_s_r  -> h_r   (HNC)  
+            if iteration>0:
+                self.get_γs_k_matrix()                           # 1. c_k, u_l_k -> γ_k   (Definition)
+                self.γs_r_matrix = self.FT_k_2_r_matrix(self.γs_k_matrix) # γ_k        -> γ_r   (FT)     
+            else:
+                self.γs_r_matrix = 0#-self.βu_l_r_matrix
 
+            self.h_r_matrix = -1 + np.exp(self.γs_r_matrix - self.βu_s_r_matrix) # 2. γ_r,u_s_r  -> h_r   (HNC)   
+            self.h_r_matrix = np.where(self.h_r_matrix>10, 10, self.h_r_matrix)
             # Plug into HNC equation
             new_c_s_r_matrix = self.h_r_matrix - self.γs_r_matrix # 3. h_r, γ_r   -> c_s_r (Ornstein-Zernicke)
         
@@ -200,7 +253,7 @@ class HNC_solver():
             self.get_C_matrix()  # Update C = rho c    
 
             self.h_list.append(list(self.h_r_matrix[0,0,:]))            
-            if self.num_iterations%100==0:
+            if self.num_iterations%1000oo==0:
                 print("Err in c_r: {0:.3f}".format(err_c))
             # print("Err in h_r: {0:.3f}".format(err_h))
             
@@ -256,37 +309,43 @@ class HNC_solver():
 
     def plot_species(self, species_nums):
         fig, axs = plt.subplots(ncols=2, nrows=2, figsize=(20,10))
+        self.c_r_matrix = self.FT_k_2_r_matrix(self.c_k_matrix)
         fig.suptitle("Species: " + self.name_matrix[species_nums[0]][species_nums[1]] ,fontsize=20)
         # Top Left
-        axs[0,0].plot(self.r_array, c_r_matrix[species_nums])
+        axs[0,0].plot(self.r_array, self.c_r_matrix[species_nums],'--.')
         axs[0,0].set_xlabel("r",fontsize=15)
         axs[0,0].set_ylabel("c(r)",fontsize=15)
         axs[0,0].set_title("Direct Correlation function",fontsize=15)
-        # axs[0,0].set_ylim(-1,2)
+        axs[0,0].set_yscale('symlog',linthresh=0.1)
         
         # Top Right
-        axs[0,1].plot(self.k_array, self.c_k_matrix[species_nums])
+        axs[0,1].plot(self.k_array, self.c_k_matrix[species_nums],'--.')
         axs[0,1].set_xlabel("k",fontsize=15)
         axs[0,1].set_ylabel("c(k)",fontsize=15)
         axs[0,1].set_title("Fourier Direct Correlation function",fontsize=15)
-        # axs[0,1].set_ylim(-1,2)
+        axs[0,1].set_yscale('symlog',linthresh=0.1)
 
         # Bottom Left
-        axs[1,0].plot(self.r_array, g_r_matrix[species_nums])
-        axs[1,0].set_xlabel("r",fontsize=15)
-        axs[1,0].set_ylabel("g(r)",fontsize=15)
+        axs[1,0].plot(self.r_array, self.h_r_matrix[species_nums]+1,'--.')
+        axs[1,0].set_xlabel("r/r_s",fontsize=15)
+        axs[1,0].set_ylabel("g(r/r_s)",fontsize=15)
         axs[1,0].set_title("Radial distribution function",fontsize=15)
         axs[1,0].set_ylim(-1,2)
+        axs[1,0].set_yscale('symlog',linthresh=0.1)
         
-        # Bottom Right
-        axs[1,1].plot(self.r_array, self.S_k_matrix[species_nums])
-        axs[1,1].set_xlabel("k",fontsize=15)
-        axs[1,1].set_ylabel("S(k)",fontsize=15)
-        axs[1,1].set_title("Static structure factor",fontsize=15)
+        #Bottom Right
+        axs[1,1].plot(self.r_array, np.exp(self.γs_r_matrix + self.βu_l_r_matrix)[species_nums] ,'--.')
+        axs[1,1].set_xlabel("r/r_s",fontsize=15)
+        axs[1,1].set_ylabel(r"$e^\gamma(r)$",fontsize=15)
+        axs[1,1].set_title(r"$n=n_{ideal}(r) e^{\gamma(r)}$",fontsize=15)
+        axs[1,1].set_yscale('symlog',linthresh=0.1)
 
         for ax in axs.flatten():
             ax.tick_params(labelsize=15)
-        
+            ax.set_xscale('log')
+
+    
+
         plt.tight_layout()
         # plt.show()
 
@@ -329,19 +388,53 @@ class HNC_solver():
         plt.tight_layout(rect=[0.03, 0.03, 0.95, 0.95], pad=0.4, w_pad=5.0, h_pad=5.0)
         plt.show()
 
-    def plot_g_all_species(self):
+    def plot_g_all_species(self, data_to_compare=None, data_names=None):
         fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(8*self.N_species,4*self.N_species))
         fig.suptitle("Radial Distribution Function for all Species",fontsize=20,y=1)
 
         for i in range(self.N_species):
             for j in range(self.N_species):
-                ax.plot(self.r_array, self.h_r_matrix[i,j]+1, label=self.name_matrix[i][j] + r", $\Gamma_{{ {0},{1} }}$ = {2:.2f}".format(i,j,self.Gamma[i][j]) )
+                ax.plot(self.r_array, self.h_r_matrix[i,j]+1,'--.', label=self.name_matrix[i][j] + r", $\Gamma_{{ {0},{1} }}$ = {2:.2f}".format(i,j,self.Gamma[i][j]) )
         
-        ax.set_ylim(0,2)
+        if data_to_compare==None:
+            pass
+        else:
+            for file_name, label in zip(data_to_compare,data_names):
+                r_datas, g_datas = np.array(read_csv(file_name)).T
+                ax.plot(r_datas, g_datas, label=label)
+                ax.legend(fontsize=15)
+
+        ax.set_ylim(1e-3,5)
+        # ax.set_yscale('log')
+        # ax.set_xscale('log')
         ax.tick_params(labelsize=20)
         ax.set_xlabel(r"$r/r_s$",fontsize=20)
-
+        ax.set_xlim(self.del_r,10)
         ax.set_ylabel(r"$g(r/r_s)$",fontsize=20)
+        ax.set_yscale('symlog',linthresh=0.1)
+        ax.set_xscale('log')
+        ax.tick_params(labelsize=15)
+        
+        plt.tight_layout()#rect=[0.03, 0.03, 0.95, 0.95], pad=0.4, w_pad=5.0, h_pad=5.0)
+        plt.legend(fontsize=20)
+        plt.grid()
+        plt.show()
+
+    def plot_βu_all_species(self):
+        fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(8*self.N_species,4*self.N_species))
+        fig.suptitle("Potential Energy between all Species",fontsize=20,y=1)
+
+        for i in range(self.N_species):
+            for j in range(self.N_species):
+                ax.plot(self.r_array, self.βu_r_matrix[i,j], label=self.name_matrix[i][j] + r", $\Gamma_{{ {0},{1} }}$ = {2:.2f}".format(i,j,self.Gamma[i][j]) )
+        
+        # ax.set_ylim(0,4)
+        ax.set_yscale('symlog',linthresh=0.1)
+        ax.set_xscale('log')
+        ax.tick_params(labelsize=20)
+        ax.set_xlabel(r"$r/r_s$",fontsize=20)
+        ax.set_xlim(0,10)
+        ax.set_ylabel(r"$\beta u(r/r_s)$",fontsize=20)
         ax.tick_params(labelsize=15)
         
         plt.tight_layout()#rect=[0.03, 0.03, 0.95, 0.95], pad=0.4, w_pad=5.0, h_pad=5.0)
