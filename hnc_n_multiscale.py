@@ -270,7 +270,7 @@ class HNC_solver():
             if iteration>=0:
                 self.set_γs_k_matrix()                           # 1. c_k, u_l_k -> γ_k   (Definition)
                 self.γs_r_matrix = self.FT_k_2_r_matrix(self.γs_k_matrix) # γ_k        -> γ_r   (FT)     
-
+            self.βω_r_matrix = self.βu_s_r_matrix - self.γs_r_matrix   # potential of mean force
             self.h_r_matrix = -1 + np.exp(self.γs_r_matrix - self.βu_s_r_matrix) # 2. γ_r,u_s_r  -> h_r   (HNC)   
             self.h_r_matrix = np.where(self.h_r_matrix>h_max, h_max, self.h_r_matrix)
             # Plug into HNC equation
@@ -328,7 +328,8 @@ class HNC_solver():
         self.Neff_species = self.N_species - 1
         # First get new effective h matrix
         self.rhoeff        = np.delete(self.rho, removed_species)
-        self.heff_r_matrix = self.remove_species(self.h_r_matrix, removed_species)
+        self.βωeff_r_matrix   = self.remove_species(self.βω_r_matrix, removed_species)
+        self.heff_r_matrix = -1 + np.exp(-self.βωeff_r_matrix)  #self.remove_species(self.h_r_matrix, removed_species)
         self.heff_k_matrix = self.FT_r_2_k_matrix(self.heff_r_matrix)
 
         #Initialize other matrices to new size
@@ -341,7 +342,8 @@ class HNC_solver():
         self.ceff_r_matrix = self.FT_k_2_r_matrix(self.ceff_k_matrix)
 
         # Approximate with HNC
-        self.βueff_r_matrix[ieff,jeff]   = self.heff_r_matrix[ieff,jeff] - self.ceff_r_matrix[ieff,jeff] - np.log(1+self.heff_r_matrix[ieff,jeff]) #  h_r, c_r -> βu_r
+        # self.βueff_r_matrix[ieff,jeff]   = self.heff_r_matrix[ieff,jeff] - self.ceff_r_matrix[ieff,jeff] - np.log(1+self.heff_r_matrix[ieff,jeff]) #  h_r, c_r -> βu_r
+        self.βueff_r_matrix   = self.heff_r_matrix - self.ceff_r_matrix + self.βωeff_r_matrix
 
     ############# PLOTTING #############
     def plot_species(self, species_nums):
@@ -437,7 +439,7 @@ class HNC_solver():
             pass
         else:
             for file_name, label in zip(data_to_compare, data_names):
-                r_datas, g_datas = np.array(read_csv(file_name,delim_whitespace=True,header=None)).T
+                r_datas, g_datas = np.array(read_csv(file_name,delimiter=',',header=1)).T
                 ax.plot(r_datas, g_datas,'--.', label=label)
                 ax.legend(fontsize=15)
 
