@@ -22,9 +22,7 @@ class HNC_solver():
         self.dst_type = dst_type
 
         self.I = np.eye(N_species)
-        self.i = slice(None,self.N_species)
-        self.j = slice(None,self.N_species)
-
+        
         self.make_k_r_spaces()
         self.initialize()
 
@@ -100,7 +98,7 @@ class HNC_solver():
         self.set_βu_matrix(self.Gamma[:,:,np.newaxis]*(np.exp(- self.kappa * self.r_array) / self.r_array)[np.newaxis, np.newaxis,:])
 
     def initialize_c_k(self):
-        self.c_k_matrix[:,:,:] = self.βu_k_matrix[:,:,:]
+        self.c_k_matrix[:,:,:] = -self.βu_k_matrix[:,:,:]
         self.c_s_k_matrix = self.c_k_matrix + self.βu_l_k_matrix
         self.c_s_r_matrix = self.FT_k_2_r_matrix(self.c_s_k_matrix)
   
@@ -134,18 +132,6 @@ class HNC_solver():
         self.fact_k_2_r = self.del_k / (4. * np.pi**2)
         self.dimless_dens = 3. / (4 * np.pi)
 
-    # def make_k_r_spaces(self):
-    #     self.del_r = self.R_max / self.N_bins
-    #     self.r_array = np.linspace(self.del_r / 2, self.R_max - self.del_r / 2, self.N_bins)
-
-    #     self.del_k = np.pi / ((self.N_bins + 1) * self.del_r)
-    #     self.K_max = self.del_k * self.N_bins
-    #     self.k_array = np.linspace(self.del_k / 2, self.K_max - self.del_k / 2, self.N_bins)
-
-    #     self.fact_r_2_k = 2 * np.pi * self.del_r
-    #     self.fact_k_2_r = self.del_k / (4. * np.pi**2)
-    #     self.dimless_dens = 3. / (4 * np.pi)
-
     def FT_r_2_k(self, input_array):
         from_dst = self.fact_r_2_k * fftpack.dst(self.r_array * input_array, type=3)
         return from_dst / self.k_array
@@ -155,17 +141,15 @@ class HNC_solver():
         return from_idst / self.r_array
 
     def FT_r_2_k_matrix(self, f_r):
-        i, j = self.i, self.j
         N = f_r.shape[0]
         f_k = np.zeros((N, N, self.N_bins))
-        f_k[i,j] = self.FT_r_2_k(f_r[i,j])
+        f_k[:,:] = self.FT_r_2_k(f_r[:,:])
         return f_k
 
     def FT_k_2_r_matrix(self, f_k):
-        i, j = self.i, self.j
         N = f_k.shape[0]
         f_r = np.zeros((N, N, self.N_bins))
-        f_r[i,j] = self.FT_k_2_r(f_k[i,j])
+        f_r = self.FT_k_2_r(f_k)
         return f_r
 
     # Setters  
@@ -200,8 +184,6 @@ class HNC_solver():
         invert N_species x N_species  matrix equation to get γ_k = h_k - c_k
         γs_k = (I-C)^-1 (C c_k_s - u_s_k)
         """
-        i, j = self.i, self.j
-
         denominator = self.invert_matrix(self.I[:,:,np.newaxis] - self.C_matrix)
         numerator   = self.A_times_B(self.C_matrix, self.c_s_k_matrix ) -  self.βu_l_k_matrix 
         self.γs_k_matrix = self.A_times_B(denominator, numerator )
@@ -214,28 +196,27 @@ class HNC_solver():
         """
 
         A_inverse = np.zeros_like(A_matrix)#np.linalg.inv(A_matrix)
-        i, j = self.i, self.j
 
         for k_index in range(self.N_bins):
-            A_inverse[i, j, k_index] = np.linalg.inv(A_matrix[i,j,k_index])
+            A_inverse[:,:, k_index] = np.linalg.inv(A_matrix[:,:,k_index])
 
         return A_inverse    
 
-    def invert_matrix(self, A_matrix):
-        """
-        Calls routine to invert an NxN x N_bins matrix
-        """
+    # def invert_matrix(self, A_matrix):
+    #     """
+    #     Calls routine to invert an NxN x N_bins matrix
+    #     """
 
-        A_inverse = np.zeros_like(A_matrix)#np.linalg.inv(A_matrix)
+    #     A_inverse = np.zeros_like(A_matrix)#np.linalg.inv(A_matrix)
         
-        det  = A_matrix[0,0]*A_matrix[1,1] - A_matrix[1,0]*A_matrix[0,1]
-        for k_index in range(self.N_bins):
-            A_inverse[0, 0, k_index] =  1/det[k_index]*A_matrix[1,1,k_index]
-            A_inverse[1, 0, k_index] = -1/det[k_index]*A_matrix[1,0,k_index]
-            A_inverse[0, 1, k_index] = -1/det[k_index]*A_matrix[0,1,k_index]
-            A_inverse[1, 1, k_index] =  1/det[k_index]*A_matrix[0,0,k_index] 
+    #     det  = A_matrix[0,0]*A_matrix[1,1] - A_matrix[1,0]*A_matrix[0,1]
+    #     for k_index in range(self.N_bins):
+    #         A_inverse[0, 0, k_index] =  1/det[k_index]*A_matrix[1,1,k_index]
+    #         A_inverse[1, 0, k_index] = -1/det[k_index]*A_matrix[1,0,k_index]
+    #         A_inverse[0, 1, k_index] = -1/det[k_index]*A_matrix[0,1,k_index]
+    #         A_inverse[1, 1, k_index] =  1/det[k_index]*A_matrix[0,0,k_index] 
 
-        return A_inverse    
+    #     return A_inverse    
 
     def A_times_B(self,A,B):    
         """
@@ -244,16 +225,23 @@ class HNC_solver():
         product = np.einsum('ikm,kjm->ijm', A, B)
         return product
 
-    def A_times_B(self,A,B):    
-        """
-        Multiplies N x N x N_bin
-        """
-        i, j = self.i, self.j
-        A_product = np.zeros_like(A)
-        for k_index in range(self.N_bins):
-            A_product[:,:,k_index] = A[:,:,k_index] @ B[:,:,k_index] 
-        return A_product
+    # def A_times_B(self,A,B):    
+    #     """
+    #     Multiplies N x N x N_bin
+    #     """
+    #     A_product = np.zeros_like(A)
+    #     for k_index in range(self.N_bins):
+    #         A_product[:,:,k_index] = A[:,:,k_index] @ B[:,:,k_index] 
+    #     return A_product
         
+    def updater(self,old, new, alpha0 = 0.5):
+        max_change = np.max(new/old)
+        alpha  = np.min([alpha0,  alpha0/max_change])
+        print("alpha = ", alpha) 
+        # return old*(1-alpha) + new*alpha
+        return new
+
+
     # Solver
     def HNC_solve(self, alpha=1e-2, h_max=200):
         """ 
@@ -279,7 +267,7 @@ class HNC_solver():
         self.h_list = []
         while not converged and iteration < self.num_iterations:
             # Compute matrices in k-space using OZ equation
-            if iteration>0:
+            if iteration>=0:
                 self.set_γs_k_matrix()                           # 1. c_k, u_l_k -> γ_k   (Definition)
                 self.γs_r_matrix = self.FT_k_2_r_matrix(self.γs_k_matrix) # γ_k        -> γ_r   (FT)     
 
@@ -292,7 +280,8 @@ class HNC_solver():
             err_c = np.linalg.norm(new_c_s_r_matrix - self.c_s_r_matrix) / np.sqrt(self.N_bins*self.N_species)
 
             # Update h_r, c_r_matrix
-            self.c_s_r_matrix = self.c_s_r_matrix*(1-alpha) + alpha*new_c_s_r_matrix #Picard
+            self.c_s_r_matrix = new_c_s_r_matrix#self.updater(self.c_s_r_matrix, new_c_s_r_matrix, alpha0=alpha) # Picard
+            
             self.c_s_k_matrix = self.FT_r_2_k_matrix(self.c_s_r_matrix)  # FT
             
             self.c_r_matrix = self.c_s_r_matrix  - self.βu_l_r_matrix # 4. c_s, u_l   -> c_r_k (Definition)
