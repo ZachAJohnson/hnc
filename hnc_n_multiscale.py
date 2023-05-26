@@ -238,8 +238,8 @@ class HNC_solver():
         max_change = np.max(new/old)
         alpha  = np.min([alpha0,  alpha0/max_change])
         print("alpha = ", alpha) 
-        # return old*(1-alpha) + new*alpha
-        return new
+        return old*(1-alpha) + new*alpha
+        # return new
 
 
     # Solver
