@@ -9,7 +9,8 @@ from pandas import read_csv
 π = np.pi
 
 class HNC_solver():
-    def __init__(self, N_species, Gamma, rho, dst_type=3, kappa = 1.0, kappa_multiscale = 1.0, tol=1e-4, num_iterations=1000, R_max=25.0, N_bins=512, names=None):
+    def __init__(self, N_species, Gamma, rho, fixed_h_r_matrix = None, fixed_h_species=None, dst_type=3, kappa = 1.0, kappa_multiscale = 1.0, tol=1e-4, 
+                        num_iterations=1000, R_max=25.0, N_bins=512, names=None):
         self.N_species = N_species
         self.Gamma = Gamma
         self.rho = rho
@@ -20,6 +21,10 @@ class HNC_solver():
         self.R_max = R_max
         self.N_bins = N_bins
         self.dst_type = dst_type
+
+        if fixed_h_r_matrix==None:
+            self.fixed_h_r_matrix = np.zeros((N_species,N_species, N_bins))
+        self.fixed_h_species = fixed_h_species
 
         self.I = np.eye(N_species)
         
@@ -189,6 +194,10 @@ class HNC_solver():
         self.γs_k_matrix = self.A_times_B(denominator, numerator )
         # print("asymm γs: ", set((self.γs_k_matrix[0,1,:]/self.γs_k_matrix[1,0,:]).flatten()))
 
+    def update_fixed_h(self, h_r_matrix):
+        for species in self.fixed_h_species:
+            h_r_matrix[species] = self.fixed_h_r_matrix[species]
+
     # Matrix Manipulation
     def invert_matrix(self, A_matrix):
         """
@@ -208,11 +217,11 @@ class HNC_solver():
         """
         product = np.einsum('ikm,kjm->ijm', A, B)
         return product
-        
+    
     def updater(self,old, new, alpha0 = 0.1):
-        max_change = np.max(new/old)
-        alpha  = np.min([alpha0,  alpha0/max_change])
-        return old*(1-alpha) + new*alpha
+        # max_change = np.max(new/old)
+        # alpha  = np.min([alpha0,  alpha0/max_change])
+        return old*(1-alpha0) + new*alpha0
 
     # Solver
     def HNC_solve(self, alpha=1e-2, h_max=200):
@@ -243,33 +252,42 @@ class HNC_solver():
                 self.set_γs_k_matrix()                           # 1. c_k, u_l_k -> γ_k   (Definition)
                 self.γs_r_matrix = self.FT_k_2_r_matrix(self.γs_k_matrix) # γ_k        -> γ_r   (FT)     
             self.βω_r_matrix = self.βu_s_r_matrix - self.γs_r_matrix   # potential of mean force
-            self.h_r_matrix = -1 + np.exp(self.γs_r_matrix - self.βu_s_r_matrix) # 2. γ_r,u_s_r  -> h_r   (HNC)   
-            self.h_r_matrix = np.where(self.h_r_matrix>h_max, h_max, self.h_r_matrix)
-            # Plug into HNC equation
-            new_c_s_r_matrix = self.h_r_matrix - self.γs_r_matrix # 3. h_r, γ_r   -> c_s_r (Ornstein-Zernicke)
-        
+                
+            #HNC
+            new_h_r_matrix = -1 + np.exp(self.γs_r_matrix - self.βu_s_r_matrix) # 2. γ_r,u_s_r  -> h_r   (HNC)   
+            new_h_r_matrix = np.where(new_h_r_matrix>h_max, h_max, new_h_r_matrix)
+            # If any h fixed, fix now
+            if self.fixed_h_species != None:
+                self.update_fixed_h(new_h_r_matrix)
             # Compute change over iteration
-            err_c = np.linalg.norm(new_c_s_r_matrix - self.c_s_r_matrix) / np.sqrt(self.N_bins*self.N_species)
-
-            # Update h_r, c_r_matrix
-            self.c_s_r_matrix = self.updater(self.c_s_r_matrix, new_c_s_r_matrix, alpha0=alpha) # Picard
-            
+            err_h = np.linalg.norm(new_h_r_matrix - self.h_r_matrix) / np.sqrt(self.N_bins*self.N_species)
+            # Update h Picard style
+            self.h_r_matrix = self.updater(self.h_r_matrix, new_h_r_matrix, alpha0=alpha) # Picard
+            # Plug into HNC equation to get c
+            self.c_s_r_matrix = self.h_r_matrix - self.γs_r_matrix # 3. h_r, γ_r   -> c_s_r (Ornstein-Zernicke)
             self.c_s_k_matrix = self.FT_r_2_k_matrix(self.c_s_r_matrix)  # FT
             
             self.c_r_matrix = self.c_s_r_matrix  - self.βu_l_r_matrix # 4. c_s, u_l   -> c_r_k (Definition)
             self.c_k_matrix = self.c_s_k_matrix  - self.βu_l_k_matrix# FT
             self.set_C_matrix()  # Update C = rho c    
 
+            # Now for any fixed h species, find corresponding potential
+            # if self.fixed_h_species != None:
+            #     self.invert_HNC() # to get βu for fixed h species
+            #     for species in self.fixed_h_species:
+            #         new_βu_r_matrix = self.βu_r_matrix.copy()
+            #         new_βu_r_matrix[species] = self.βueff_r_matrix[species]
+            #         self.set_βu_matrix(new_βu_r_matrix)
             self.h_list.append(self.h_r_matrix.copy())            
             if iteration%1==0:
-                print("{0}: Err in c_r: {1:.3f}".format(iteration,err_c))
+                print("{0}: Err in h_r: {1:.3f}".format(iteration,err_h))
             # print("Err in h_r: {0:.3f}".format(err_h))
             
-            if isnan(err_c):
-                print("ERROR: c_r is nan.")
+            if isnan(err_h):
+                print("ERROR: h_r is nan.")
                 break
 
-            if err_c < self.tol:
+            if err_h < self.tol:
                 converged = True
 
             iteration += 1
@@ -293,31 +311,39 @@ class HNC_solver():
         self.ceff_r_matrix = np.zeros((self.Neff_species,self.Neff_species,self.N_bins))
         self.βueff_r_matrix = np.zeros((self.Neff_species,self.Neff_species,self.N_bins))
 
-    def invert_HNC(self, removed_species):
+    def invert_HNC(self, removed_species=None):
         """ 
         Takes N species results and inverts it to find single effective v_ii for one species
         """
-        self.Neff_species = self.N_species - 1
-        # First get new effective h matrix
-        self.rhoeff        = np.delete(self.rho, removed_species)
-        self.βωeff_r_matrix   = self.remove_species(self.βω_r_matrix, removed_species)
+        if removed_species != None:
+            self.Neff_species = self.N_species - 1
+            # First get new effective h matrix
+            self.rhoeff        = np.delete(self.rho, removed_species)
+            self.βωeff_r_matrix   = self.remove_species(self.βω_r_matrix, removed_species)
+        else:
+            self.Neff_species = self.N_species
+            # First get new effective h matrix
+            self.rhoeff        = self.rho
+            self.βωeff_r_matrix   = self.βω_r_matrix
         self.heff_r_matrix = -1 + np.exp(-self.βωeff_r_matrix)  #self.remove_species(self.h_r_matrix, removed_species)
         self.heff_k_matrix = self.FT_r_2_k_matrix(self.heff_r_matrix)
 
         #Initialize other matrices to new size
         self.initialize_effective()
-        ieff, jeff = slice(None, self.Neff_species), slice(None,self.Neff_species)
 
         # EXACT Ornstein-Zernike!
-        I_plus_h_rho_inverse = self.invert_matrix(self.I[ieff, jeff,np.newaxis] + self.heff_k_matrix[ieff,jeff]*self.rhoeff[ieff,np.newaxis,np.newaxis])
-        self.ceff_k_matrix[ieff, jeff]  =  self.A_times_B(I_plus_h_rho_inverse, self.heff_k_matrix)
+        I_plus_h_rho_inverse = self.invert_matrix(self.I[:,:,np.newaxis] + self.heff_k_matrix*self.rhoeff[:,np.newaxis,np.newaxis])
+        self.ceff_k_matrix  =  self.A_times_B(I_plus_h_rho_inverse, self.heff_k_matrix)
         self.ceff_r_matrix = self.FT_k_2_r_matrix(self.ceff_k_matrix)
 
         # Approximate with HNC
         # self.βueff_r_matrix[ieff,jeff]   = self.heff_r_matrix[ieff,jeff] - self.ceff_r_matrix[ieff,jeff] - np.log(1+self.heff_r_matrix[ieff,jeff]) #  h_r, c_r -> βu_r
         self.βueff_r_matrix   = self.heff_r_matrix - self.ceff_r_matrix + self.βωeff_r_matrix
 
+    
+
     ############# PLOTTING #############
+
     def plot_species(self, species_nums):
         fig, axs = plt.subplots(ncols=2, nrows=2, figsize=(16,10))
         self.c_r_matrix = self.FT_k_2_r_matrix(self.c_k_matrix)
@@ -447,7 +473,7 @@ class HNC_solver():
         fig.suptitle("Potential Energy between all Species",fontsize=20,y=1)
 
         for i in range(self.N_species):
-            for j in range(self.N_species):
+            for j in range(i,self.N_species):
                 ax.plot(self.r_array, self.βu_r_matrix[i,j], label=self.name_matrix[i][j] + r", $\Gamma_{{ {0},{1} }}$ = {2:.2f}".format(i,j,self.Gamma[i][j]) )
         
         # ax.set_ylim(0,4)
