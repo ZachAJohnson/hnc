@@ -8,6 +8,7 @@ from pandas import read_csv
 
 π = np.pi
 
+
 class HNC_solver():
     def __init__(self, N_species, Gamma, rho, dst_type=3, kappa = 1.0, kappa_multiscale = 1.0, tol=1e-4, num_iterations=1000, R_max=25.0, N_bins=512, names=None):
         self.N_species = N_species
