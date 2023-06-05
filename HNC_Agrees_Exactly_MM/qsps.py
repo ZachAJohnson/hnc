@@ -6,6 +6,8 @@ from math import isnan
 
 from pandas import read_csv
 
+from hnc import HNC_solver
+
 from scipy.special import erfc
 
 # Build Components for QSP's

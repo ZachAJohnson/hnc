@@ -8,7 +8,10 @@ from pandas import read_csv
 
 from scipy.optimize import minimize
 
+
+
 π = np.pi
+print("This version is specifically to verify against MM HNC. It should agree exactly with output of hnc2c.f90.")
 
 
 class HNC_solver():
@@ -309,7 +312,7 @@ class HNC_solver():
         #print("tot: {0:.2e} ".format(tot_err))
 
         return tot_err
-    
+
     # Solver
     def HNC_solve(self, h_max=200, alpha_method='best', alpha_Picard = 0.1, alpha_oz = 0. ):
         """ 
@@ -332,7 +335,7 @@ class HNC_solver():
 
         converged = False
         iteration = 0
-        self.h_list, self.c_list = [], []
+        self.h_list = []
         while not converged and iteration < self.num_iterations:
             # Compute matrices in k-space using OZ equation
             # if iteration>=0:
@@ -355,8 +358,6 @@ class HNC_solver():
             self.set_C_matrix()  # Update C = rho c    
 
             self.h_list.append(self.h_r_matrix.copy())            
-            self.c_list.append(self.c_r_matrix.copy())
-
             # oz_err = np.linalg.norm(-self.h_k_matrix + self.c_k_matrix  + self.A_times_B(self.c_k_matrix, self.h_k_matrix*self.rho[:,np.newaxis,np.newaxis]))/np.sqrt(self.N_bins*self.N_species**2)
             oz_err = np.linalg.norm(-self.h_k_matrix + self.c_s_k_matrix  + self.γs_k_matrix)/np.sqrt(self.N_bins*self.N_species**2)
             hnc_err = np.linalg.norm(- 1 - self.h_r_matrix   + np.exp( -self.βu_r_matrix + self.h_r_matrix - self.c_r_matrix ))/np.sqrt(self.N_bins*self.N_species**2)
@@ -462,9 +463,9 @@ class HNC_solver():
         plt.tight_layout()
         # plt.show()
 
-    def plot_species_convergence_g(self, n_slices=4):
+    def plot_species_convergence(self, n_slices=4):
         fig, axs = plt.subplots(ncols=self.N_species, nrows=self.N_species, figsize=(10*self.N_species,6*self.N_species))
-        fig.suptitle("Radial Distribution Convergence Blue to Red" ,fontsize=20)
+        # fig.suptitle("Species: " + self.name_matrix[species_nums[0]][species_nums[1]] ,fontsize=20)
         if type(axs) not in [list, np.ndarray, tuple]: 
             axs=np.array([[axs]])
 
@@ -485,34 +486,6 @@ class HNC_solver():
                         axs[i,j].set_yscale('symlog',linthresh=10)
 
             axs[i,0].set_ylabel(r"$g(r/r_s)$",fontsize=20)
-
-        #axs[0,0].legend(fontsize=20)
-        
-        plt.show()
-
-    def plot_species_convergence_c(self, n_slices=4):
-        fig, axs = plt.subplots(ncols=self.N_species, nrows=self.N_species, figsize=(10*self.N_species,6*self.N_species))
-        fig.suptitle("Direct Correlation Function Convergence Blue to Red" ,fontsize=20)
-
-        if type(axs) not in [list, np.ndarray, tuple]: 
-            axs=np.array([[axs]])
-
-        n = len(self.h_list)
-        indcs = [int(num)-1 for num in n/n_slices*np.arange(1,n_slices+1)]
-
-        for i in range(self.N_species):
-            for j in range(self.N_species):
-                for k in indcs:
-                    color = plt.cm.jet(k/n)
-                    axs[i,j].plot(self.r_array, self.c_list[k][i,j], color=color ,label='iter: {0}'.format(int(k)))
-                    axs[i,j].set_title(self.name_matrix[i][j] + r", $\Gamma_{{ {0},{1} }}$ = {2:.2f}".format(i,j,self.Gamma[i][j]) ,fontsize=15)
-                    axs[i,j].set_xlim(0,4)
-
-                    axs[i,j].tick_params(labelsize=20)
-                    axs[-1,j].set_xlabel(r"$r/r_s$",fontsize=20)
-                    axs[i,j].set_yscale('symlog',linthresh=0.1)
-
-            axs[i,0].set_ylabel(r"$c(r/r_s)$",fontsize=20)
 
         #axs[0,0].legend(fontsize=20)
         
@@ -590,7 +563,7 @@ class HNC_solver():
         prop_cycle = plt.rcParams['axes.prop_cycle']
         colors = prop_cycle.by_key()['color']
         colors = [colors[0], colors[2], colors[3]]
-        file_names=["./MM_HNC/gii.out","./MM_HNC/gei.out","./MM_HNC/gee.out"]
+        file_names=["../MM_HNC/gii.out","../MM_HNC/gei.out","../MM_HNC/gee.out"]
         labels = [r"MM $g_{ii}$",r"MM $g_{ei}$", r"MM $g_{ee}$"]
         for file_name, label, color in zip(file_names, labels, colors):
             r_datas, g_datas = np.array(read_csv(file_name,delim_whitespace=True,header=None)).T

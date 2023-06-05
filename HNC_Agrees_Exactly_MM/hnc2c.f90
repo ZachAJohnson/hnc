@@ -40,7 +40,7 @@ program TC_HNC
   open(unit=17, file='gie.out', status='unknown')
   open(unit=18, file='gall.out', status='unknown')
 
-  gamma = 0.1813999724272042   ! = e**2/(a_iT)
+  gamma = 1.8139997242720423   ! = e**2/(a_iT)
   z_ion  = 3.0
   gamma_ii = z_ion**2*gamma
   gamma_ee = gamma

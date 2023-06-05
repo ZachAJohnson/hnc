@@ -10,8 +10,8 @@ from scipy.optimize import minimize
 
 π = np.pi
 
-
 class HNC_solver():
+
     def __init__(self, N_species, Gamma, rho, dst_type=3, kappa = 1.0, kappa_multiscale = 1.0, tol=1e-4, num_iterations=1000, R_max=25.0, N_bins=512, names=None):
         self.N_species = N_species
         self.Gamma = Gamma
@@ -25,7 +25,7 @@ class HNC_solver():
         self.dst_type = dst_type
 
         self.I = np.eye(N_species)
-        
+        self.a = 2
         self.make_k_r_spaces()
         self.initialize()
 
@@ -118,7 +118,7 @@ class HNC_solver():
   
     # R and K space grid and Fourier Transforms
     def make_k_r_spaces(self):
-        
+
         if  self.dst_type==1: 
             self.r_array = np.linspace(0, self.R_max, num=self.N_bins+1)[1:]
             self.del_r = self.r_array[1]-self.r_array[0]
@@ -237,6 +237,11 @@ class HNC_solver():
         return old*(1-alpha) + new*alpha
 
     def c_s_updater(self, c_s_r_old, c_s_r_new, method='best', alpha_Picard = 0.1, alpha_oz = 0. ):
+        if len(self.c_list)<2:
+            method='fixed'
+            alpha_Picard=1e-3
+            alpha_oz=0
+
         if method=='best' or alpha_oz > 0.0:
             # c_s_r_oz =  self.FT_k_2_r_matrix(self.h_k_matrix  - self.γs_k_matrix)
             I_plus_h_rho_inverse = self.invert_matrix(self.I[:,:,np.newaxis] + self.h_k_matrix*self.rho[:,np.newaxis,np.newaxis])
@@ -244,6 +249,7 @@ class HNC_solver():
 
         if method=='best':
             c_s_r = self.c_s_find_best_alpha(c_s_r_old, c_s_r_new, c_s_r_oz)
+        
         elif method=='fixed':
             c_s_r = alpha_Picard*c_s_r_new + (1-alpha_Picard)*c_s_r_old
             if alpha_oz>0.0:
@@ -253,10 +259,11 @@ class HNC_solver():
 
     def c_s_find_best_alpha(self, c_s_r_old, c_s_r_new, c_s_r_oz):
         
-        def c_err_1(α):
-            c_s = α*c_s_r_new + (1-α)*c_s_r_old
+        def c_err(αs):
+            α, β = αs
+            c_s = (1 - α - β)*c_s_r_new + α*self.c_list[-1] + β*self.c_list[-2] 
             err = self.total_err(c_s)
-            # print("HNC α: {0:.1e}, c_err: {1:.1e} ".format(float(α), err))
+            print("HNC α_list: {0}, c_err: {1:.1e} ".format(αs, err))
             return err
 
         def c_err_2(α):
@@ -269,19 +276,19 @@ class HNC_solver():
         method='SLSQP'
         method='Nelder-Mead'
         tol=1e-8
-        res = minimize(c_err_1, [0.01], bounds=[(1e-5,0.5)], tol=tol, options={'maxiter':int(1e2)}, method=method) #, constraints=constraints, method='COBYLA')#bounds=[(ε, 1-ε),(ε, 1-ε),(ε, 1-ε)]
+        res = minimize(c_err, [0.999,0.], bounds=[(0.45,1),(0.0,1)], tol=tol, options={'maxiter':int(1e2)}, method=method) #, constraints=constraints, method='COBYLA')#bounds=[(ε, 1-ε),(ε, 1-ε),(ε, 1-ε)]
         α_best = res.x
         print(" HNC min:", res.x, res.success, res.message)
-        c_s_r = α_best*c_s_r_new + (1-α_best)*c_s_r_old
+        c_s_r = (1 - α_best[0] - α_best[1])*c_s_r_new + α_best[0]*self.c_list[-1] + α_best[1]*self.c_list[-2]
         # res = minimize(c_err_2, [0.01], bounds=[(0,0.5)], tol=tol, options={'maxiter':int(1e2)}, method=method)#, constraints=constraints, method='COBYLA')#bounds=[(ε, 1-ε),(ε, 1-ε),(ε, 1-ε)]
         # α_best = res.x
         # print(" OZ min: ", res.x, res.success, res.message)
         return  c_s_r #α_best*c_s_r_oz + (1-α_best)*c_s_r
 
     def total_err(self, c_s_r_matrix):
-        c_s_k_matrix = self.FT_r_2_k_matrix(c_s_r_matrix)
-        c_r_matrix = c_s_r_matrix - self.βu_l_r_matrix
-        c_k_matrix = self.FT_r_2_k_matrix(c_r_matrix)    
+        # c_s_k_matrix = self.FT_r_2_k_matrix(c_s_r_matrix)
+        # c_r_matrix = c_s_r_matrix - self.βu_l_r_matrix
+        # c_k_matrix = self.FT_r_2_k_matrix(c_r_matrix)    
 
         # oz_eqn = -self.h_k_matrix + c_k_matrix  + self.A_times_B(c_k_matrix, self.h_k_matrix*self.rho[:,np.newaxis,np.newaxis])
         # C_matrix = self.rho[np.newaxis,:,np.newaxis] * c_k_matrix
@@ -292,11 +299,11 @@ class HNC_solver():
         # oz_err = np.linalg.norm(np.where( oz_eqn<-1e3, -1e3 , oz_eqn)) /np.sqrt(self.N_bins*self.N_species**2)
         # oz_err=0
         # oz_err = np.linalg.norm(oz_eqn) /np.sqrt(self.N_bins*self.N_species**2)
-        oz_err = 0
-        hnc_eqn = - 1 - self.h_r_matrix   + np.exp( -self.βu_s_r_matrix + self.h_r_matrix - c_s_r_matrix )
+        # oz_err = 0
+        # hnc_eqn = - 1 - self.h_r_matrix   + np.exp( -self.βu_s_r_matrix + self.h_r_matrix - c_s_r_matrix )
         # hnc_err = np.linalg.norm(np.where( hnc_eqn>1e5, 1e5 ,hnc_eqn) )/np.sqrt(self.N_bins*self.N_species**2)
-        hnc_err = np.linalg.norm(hnc_eqn)/np.sqrt(self.N_bins*self.N_species**2)
-        tot_err = np.sqrt(oz_err**2 + hnc_err**2)
+        # hnc_err = np.linalg.norm(hnc_eqn)/np.sqrt(self.N_bins*self.N_species**2)
+        # tot_err = np.sqrt(oz_err**2 + hnc_err**2)
 
         # h_r_matrix = c_k_matrix  + self.get_γs_k_matrix(c_k_matrix, C_matrix)+ self.βu_l_k_matrix
         # h_r_matrix = np.where(h_r_matrix+1<1e-1, 1e-1, h_r_matrix)
@@ -307,9 +314,21 @@ class HNC_solver():
 
         # print(" OZ: {0:.2e}, HNC: {1:.2e}, tot: {2:.2e} ".format(oz_err, hnc_err, tot_err))
         #print("tot: {0:.2e} ".format(tot_err))
-
+        tot_err = self.get_HNC(c_s_r_matrix)[0]
         return tot_err
-    
+
+    def get_HNC(self, c_s_r_matrix):
+        c_s_k_matrix = self.FT_r_2_k_matrix(c_s_r_matrix)
+        c_k_matrix   = c_s_k_matrix - self.βu_l_k_matrix
+        C_matrix     = self.rho[np.newaxis,:,np.newaxis] * c_k_matrix
+        γs_k_matrix  =  self.get_γs_k_matrix( c_s_k_matrix, C_matrix)
+        γs_r_matrix  =  self.FT_k_2_r_matrix(γs_k_matrix)
+        βω_r_matrix  = self.βu_s_r_matrix - γs_r_matrix
+        h_r_matrix   = -1 + np.exp(-βω_r_matrix) 
+        hnc_eqn      = - (γs_r_matrix + c_s_r_matrix) - 1 + np.exp(-βω_r_matrix)
+        return np.linalg.norm(hnc_eqn)/np.sqrt(self.N_bins*self.N_species**2), hnc_eqn
+
+
     # Solver
     def HNC_solve(self, h_max=200, alpha_method='best', alpha_Picard = 0.1, alpha_oz = 0. ):
         """ 
@@ -356,7 +375,6 @@ class HNC_solver():
 
             self.h_list.append(self.h_r_matrix.copy())            
             self.c_list.append(self.c_r_matrix.copy())
-
             # oz_err = np.linalg.norm(-self.h_k_matrix + self.c_k_matrix  + self.A_times_B(self.c_k_matrix, self.h_k_matrix*self.rho[:,np.newaxis,np.newaxis]))/np.sqrt(self.N_bins*self.N_species**2)
             oz_err = np.linalg.norm(-self.h_k_matrix + self.c_s_k_matrix  + self.γs_k_matrix)/np.sqrt(self.N_bins*self.N_species**2)
             hnc_err = np.linalg.norm(- 1 - self.h_r_matrix   + np.exp( -self.βu_r_matrix + self.h_r_matrix - self.c_r_matrix ))/np.sqrt(self.N_bins*self.N_species**2)
