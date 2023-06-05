@@ -53,29 +53,36 @@ class QSP_HNC():
         # self.lambda_TF = np.sqrt( self.Te_c / (4*π*self.ne)  )
 
         self.βe  = 1/self.Te
-        self.Λe  = np.sqrt(  self.βe*2*π /m_e )
+        # self.Λe  = np.sqrt(  self.βe*2*π /m_e )
+        self.Λee  = 1/np.sqrt(π*m_e )/self.ri
+        self.Λei  = 1/np.sqrt(2*π*m_e )/self.ri
 
-        self.Tie = np.sqrt(self.Te*self.Ti)
+        self.Tie = self.Tei_thermal()
         self.βie = 1/self.Tie
         
         # Λeff = np.sqrt(6*π) / np.sqrt( 3*Te/m_e + 0.6*v_F**2)/m_e
 
-        self.Λe_star  = self.Λe/self.ri
-        print("Λee = {0:.3f}".format(self.Λe_star))
+        print("Λee = {0:.3f}".format(self.Λee))
+        print("Λei = {0:.3f}".format(self.Λei))
         self.Γee =  self.βe/self.ri 
         self.Γei = -self.Zstar*self.βie/self.ri
         self.Γii =  self.Zstar**2*self.βi/self.ri 
 
+        self.Γ_matrix = np.array(  [[self.Γii,  self.Γei],
+                                    [self.Γei,  self.Γee]])
+ 
 
         print("Γii={0:.1f}, Γie={1:.1f}, Γee={2:.1f} ".format(self.Γii, self.Γei, self.Γee))
         print("r_i={0:.1f}".format(self.ri))
         print("r_e={0:.1f}".format(self.re))
         # print("θ  ={0:.2e}".format(self.θ))
 
-    def n_from_rs(self, rs):
+    @staticmethod
+    def n_from_rs( rs):
         return 1/(4/3*π*rs**3)
 
-    def rs_from_n(self, n):
+    @staticmethod
+    def rs_from_n(n):
         return (4/3*π*n)**(-1/3)
 
     def Tei_geometric(self):
@@ -84,18 +91,22 @@ class QSP_HNC():
     def Tei_thermal(self):
         μ_ei = self.m_i*m_e/(m_e+self.m_i) #reduced mass
         Tie = μ_ei * (self.Te/m_e + self.Ti/self.m_i) #thermal velocity defined Tei
-        return 
+        return Tie
 
-    def βv_Deutsch(self, Γ, r):
-        return Γ/r* ( 1 -  np.exp(-np.sqrt(2)*π*r/self.Λe_star) )
+    def βv_Deutsch(self, Γ, r, Λe):
+        # return Γ/r* ( 1 -  np.exp(-np.sqrt(2)π*r/Λe) ) # for Sarkas Λ
+        return Γ/r* ( 1 -  np.exp(-r/Λe) )
 
     # Kelbg looks really weird??
-    def βv_Kelbg(self, Γ,r):
-        return Γ/r*( 1 - np.exp(-2*π*r**2/self.Λe_star**2)+ np.sqrt(2)*π*r/self.Λe_star*erfc(np.sqrt(2*π)*r/self.Λe_star))
+    def βv_Kelbg(self, Γ,r, Λe):
+        return Γ/r*( 1 - np.exp(-r**2/(Λe**2*2*π)) + r/Λe*erfc(r/Λe/np.sqrt(2*π)) )
+        # return Γ/r*( 1 - np.exp(-2*π*r**2/Λe**2)+ np.sqrt(2)*π*r/Λe*erfc(np.sqrt(2*π)*r/Λe))
 
-    def βv_Pauli(self, r):
+    def βv_Pauli(self, r, Λe):
         #Sarkas
-        return  np.log(2) * np.exp(-4*π* r**2 /( self.Λe_star**2))
+        # return  np.log(2) * np.exp(-4*π* r**2 /( Λe**2))
+        return -np.log(1 - 0.5*np.exp(-r**2/(2*π*Λe**2)) )
+        
 
     # def βv_Pauli(r):
     #     # Jones + Murillo Eqn.
@@ -105,10 +116,10 @@ class QSP_HNC():
     ######### Build Actual QSP's
 
     def βvee(self, r):
-        return self.βv_Kelbg(self.Γee,r) + self.βv_Pauli(r)
+        return self.βv_Deutsch(self.Γee,r, self.Λee) + self.βv_Pauli(r,self.Λee)
 
     def βvei(self, r):
-        return self.βv_Kelbg(self.Γei,r) #+ (Z-Zstar)*βv_Pauli(r)
+        return self.βv_Deutsch(self.Γei,r,self.Λei) #+ (Z-Zstar)*βv_Pauli(r)
 
     def βvei_atomic(self, r):
         r_c = 3/5 #3/5 r_s in linear n_b(r) model
