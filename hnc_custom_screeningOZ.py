@@ -339,7 +339,71 @@ class HNC_solver():
 
         return tot_err
     
-    # Solver
+    # # Solver
+    # def HNC_solve(self, h_max=200, alpha_method='best', alpha_Picard = 0.1, alpha_oz = 0. ):
+    #     """ 
+    #     Integral equation solutions for the classical electron gas 
+    #     J. F. Springer; M. A. Pokrant; F. A. Stevens, Jr.
+    #     Crossmark: Check for Updates
+    #     J. Chem. Phys. 58, 4863–4867 (1973)
+    #     https://doi.org/10.1063/1.1679070
+
+    #     Their N is my γ = h - c
+    #     1. c_k, u_l_k -> γ_k   (Definition)
+    #     2. γ_r,u_s_r  -> h_r   (HNC)
+    #     3. h_r, γ_r   -> c_s_r (Ornstein-Zernicke)
+    #     4. c_s, u_l   -> c_r_k (Definition)
+    #     Args: 
+    #         species_left: tuple specifying which species to solve for
+    #     Returns:
+    #         None
+    #     """
+
+    #     converged = False
+    #     iteration = 0
+    #     self.h_list, self.c_list = [], []
+    #     while not converged and iteration < self.num_iterations:
+    #         # Compute matrices in k-space using OZ equation
+    #         self.Th_matrix = self.Temp_matrix[:,:,np.newaxis]*self.h_k_matrix
+    #         self.nh_matrix = self.rho[:,np.newaxis, np.newaxis] * self.h_k_matrix
+            
+    #         self.D_matrix  =  self.A_times_B(self.Th_matrix, self.invert_matrix(self.I[:,:,np.newaxis] + self.nh_matrix) )
+    #         self.c_k_matrix = self.D_matrix/self.Temp_matrix[:,:,np.newaxis]
+    #         self.γ_k_matrix = self.h_k_matrix - self.c_k_matrix
+    #         self.γ_r_matrix = self.FT_k_2_r_matrix(self.γ_k_matrix)
+    #         self.βω_r_matrix = self.βu_r_matrix - self.γ_r_matrix
+    #         new_h_r_matrix = -1 + np.exp(-self.βω_r_matrix ) # 2. γ_r,u_s_r  -> h_r   (HNC)   
+
+    #         old_h_r_matrix = self.h_r_matrix.copy()
+    #         self.h_r_matrix = self.h_updater(old_h_r_matrix, new_h_r_matrix, method = alpha_method, alpha_Picard = alpha_Picard, alpha_oz = alpha_oz )
+            
+    #         self.h_list.append(self.h_r_matrix.copy())            
+    #         self.c_list.append(self.c_r_matrix.copy())
+
+    #         # oz_err = np.linalg.norm(-self.h_k_matrix + self.c_k_matrix  + self.A_times_B(self.c_k_matrix, self.h_k_matrix*self.rho[:,np.newaxis,np.newaxis]))/np.sqrt(self.N_bins*self.N_species**2)
+    #         oz_err = np.linalg.norm(-self.h_k_matrix + self.c_s_k_matrix  + self.γs_k_matrix)/np.sqrt(self.N_bins*self.N_species**2)
+    #         hnc_err = np.linalg.norm(- 1 - self.h_r_matrix   + np.exp( -self.βu_r_matrix + self.h_r_matrix - self.c_r_matrix ))/np.sqrt(self.N_bins*self.N_species**2)
+    #                     # Compute change over iteration
+    #         err_h = np.linalg.norm(old_h_r_matrix - self.h_r_matrix) / np.sqrt(self.N_bins*self.N_species**2)
+
+    #         if iteration%1==0:
+    #             print("{0}: Err in h_r: {1:.2e}, OZ: {2:.2e}, HNC: {3:.2e}".format(iteration,   err_h, oz_err, hnc_err))
+    #         # print("Err in h_r: {0:.3f}".format(err_h))
+            
+    #         if isnan(err_h):
+    #             print("ERROR: c_r is nan.")
+    #             break
+
+    #         if err_h < self.tol:
+    #             converged = True
+
+    #         iteration += 1
+
+    #     if not converged:
+    #         print("Warning: HNC_solver did not converge within the specified number of iterations.")
+
+
+# Solver
     def HNC_solve(self, h_max=200, alpha_method='best', alpha_Picard = 0.1, alpha_oz = 0. ):
         """ 
         Integral equation solutions for the classical electron gas 
