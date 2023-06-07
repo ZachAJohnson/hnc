@@ -115,7 +115,6 @@ class HNC_solver():
         self.c_k_matrix[:,:,:] = -self.βu_k_matrix[:,:,:]
         self.c_s_k_matrix = self.c_k_matrix + self.βu_l_k_matrix
         self.c_s_r_matrix = self.FT_k_2_r_matrix(self.c_s_k_matrix)
-        self.c_r_matrix   = self.c_s_k_matrix - self.βu_l_k_matrix
   
     # R and K space grid and Fourier Transforms
     def make_k_r_spaces(self):
@@ -274,10 +273,10 @@ class HNC_solver():
         α_best = res.x
         print(" HNC min:", res.x, res.success, res.message)
         c_s_r = α_best*c_s_r_new + (1-α_best)*c_s_r_old
-        res = minimize(c_err_2, [0.01], bounds=[(0,0.5)], tol=tol, options={'maxiter':int(1e2)}, method=method)#, constraints=constraints, method='COBYLA')#bounds=[(ε, 1-ε),(ε, 1-ε),(ε, 1-ε)]
-        α_best = res.x
-        print(" OZ min: ", res.x, res.success, res.message)
-        return  α_best*c_s_r_oz + (1-α_best)*c_s_r
+        # res = minimize(c_err_2, [0.01], bounds=[(0,0.5)], tol=tol, options={'maxiter':int(1e2)}, method=method)#, constraints=constraints, method='COBYLA')#bounds=[(ε, 1-ε),(ε, 1-ε),(ε, 1-ε)]
+        # α_best = res.x
+        # print(" OZ min: ", res.x, res.success, res.message)
+        return  c_s_r #α_best*c_s_r_oz + (1-α_best)*c_s_r
 
     def total_err(self, c_s_r_matrix):
         c_s_k_matrix = self.FT_r_2_k_matrix(c_s_r_matrix)
@@ -345,12 +344,7 @@ class HNC_solver():
             self.h_k_matrix = self.FT_r_2_k_matrix(self.h_r_matrix)
             # Plug into HNC equation
             new_c_s_r_matrix = self.h_r_matrix - self.γs_r_matrix # 3. h_r, γ_r   -> c_s_r (Ornstein-Zernicke)
-            # if iteration < 10 and self.N_species==2:
-            #     hee_r = self.h_r_matrix[1,1]
-            #     hee_k = self.h_k_matrix[1,1]
-            # elif iteration>=10 and self.N_species==2:
-            #     self.h_r_matrix[1,1] = hee_r 
-            #     self.h_k_matrix[1,1] = hee_k
+
             # Update h_r, c_r_matrix
             old_c_s_r_matrix = self.c_s_r_matrix.copy()
             self.c_s_r_matrix = self.c_s_updater(old_c_s_r_matrix, new_c_s_r_matrix, method = alpha_method, alpha_Picard = alpha_Picard, alpha_oz = alpha_oz )
@@ -360,7 +354,7 @@ class HNC_solver():
             self.c_r_matrix = self.c_s_r_matrix  - self.βu_l_r_matrix # 4. c_s, u_l   -> c_r_k (Definition)
             self.c_k_matrix = self.c_s_k_matrix  - self.βu_l_k_matrix# FT
             self.set_C_matrix()  # Update C = rho c    
-            
+
             self.h_list.append(self.h_r_matrix.copy())            
             self.c_list.append(self.c_r_matrix.copy())
 
@@ -574,10 +568,10 @@ class HNC_solver():
         # ax.set_xscale('log')
         ax.tick_params(labelsize=20)
         ax.set_xlabel(r"$r/r_s$",fontsize=20)
-        ax.set_xlim(self.del_r,10)
+        ax.set_xlim(self.del_r,self.r_array[-1])
         ax.set_ylabel(r"$g(r/r_s)$",fontsize=20)
         # ax.set_yscale('symlog',linthresh=0.1)
-        ax.set_xscale('log')
+        # ax.set_xscale('log')
         ax.tick_params(labelsize=15)
         
         plt.tight_layout()#rect=[0.03, 0.03, 0.95, 0.95], pad=0.4, w_pad=5.0, h_pad=5.0)

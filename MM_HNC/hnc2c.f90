@@ -10,8 +10,8 @@ program TC_HNC
   implicit none
 
 
-  integer, parameter :: num_bins=500, num_iter = 500
-  real, parameter :: r_max = 5.0, Four_Pi = 12.5663706144
+  integer, parameter :: num_bins=1000, num_iter = 500
+  real, parameter :: r_max = 10.0, Four_Pi = 12.5663706144
   real, parameter :: Pi = 3.141592653589793, Th_O_F_Pi=0.238732415
   real, parameter :: Two_Pi_Sq = 19.7392088022, ln_2 = 0.693147182
   real, dimension(num_bins) :: u_s_ii_r, u_s_ee_r, u_s_ei_r, u_s_ie_r
@@ -40,12 +40,12 @@ program TC_HNC
   open(unit=17, file='gie.out', status='unknown')
   open(unit=18, file='gall.out', status='unknown')
 
-  gamma = 0.1813999724272042   ! = e**2/(a_iT)
-  z_ion  = 3.0
+  gamma = 178.917   ! = e**2/(a_iT)
+  z_ion  = 1.0
   gamma_ii = z_ion**2*gamma
   gamma_ee = gamma
   gamma_ei = z_ion*gamma
-  r_s = 3 !0.234 ! a_e/a_B
+  r_s = 0.4473 !0.234 ! a_e/a_B
   kappa = 0*sqrt(3*gamma/250.)
   z_ion_th = z_ion**(1./3.)
   n_e   = z_ion*Th_O_F_Pi
