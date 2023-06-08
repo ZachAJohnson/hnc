@@ -113,9 +113,11 @@ class HNC_solver():
 
     def initialize_c_k(self):
         self.c_k_matrix[:,:,:] = -self.βu_k_matrix[:,:,:]
+        self.c_r_matrix = self.FT_k_2_r_matrix(self.c_k_matrix)
         self.c_s_k_matrix = self.c_k_matrix + self.βu_l_k_matrix
         self.c_s_r_matrix = self.FT_k_2_r_matrix(self.c_s_k_matrix)
-        self.c_r_matrix   = self.c_s_k_matrix - self.βu_l_k_matrix
+        # self.c_r_matrix   = self.c_s_k_matrix - self.βu_l_k_matrix
+
   
     # R and K space grid and Fourier Transforms
     def make_k_r_spaces(self):
@@ -257,7 +259,7 @@ class HNC_solver():
         def c_err_1(α):
             c_s = α*c_s_r_new + (1-α)*c_s_r_old
             err = self.total_err(c_s)
-            # print("HNC α: {0:.1e}, c_err: {1:.1e} ".format(float(α), err))
+            print("HNC α: {0:.1e}, c_err: {1:.1e} ".format(float(α), err))
             return err
 
         def c_err_2(α):
@@ -270,11 +272,11 @@ class HNC_solver():
         method='SLSQP'
         method='Nelder-Mead'
         tol=1e-8
-        res = minimize(c_err_1, [0.01], bounds=[(1e-5,0.5)], tol=tol, options={'maxiter':int(1e2)}, method=method) #, constraints=constraints, method='COBYLA')#bounds=[(ε, 1-ε),(ε, 1-ε),(ε, 1-ε)]
+        res = minimize(c_err_1, [0.01], bounds=[(1e-5,1.2)], tol=tol, options={'maxiter':int(1e2)}, method=method) #, constraints=constraints, method='COBYLA')#bounds=[(ε, 1-ε),(ε, 1-ε),(ε, 1-ε)]
         α_best = res.x
         print(" HNC min:", res.x, res.success, res.message)
         c_s_r = α_best*c_s_r_new + (1-α_best)*c_s_r_old
-        res = minimize(c_err_2, [0.01], bounds=[(0,0.5)], tol=tol, options={'maxiter':int(1e2)}, method=method)#, constraints=constraints, method='COBYLA')#bounds=[(ε, 1-ε),(ε, 1-ε),(ε, 1-ε)]
+        res = minimize(c_err_2, [0.01], bounds=[(0,1.2)], tol=tol, options={'maxiter':int(1e2)}, method=method)#, constraints=constraints, method='COBYLA')#bounds=[(ε, 1-ε),(ε, 1-ε),(ε, 1-ε)]
         α_best = res.x
         print(" OZ min: ", res.x, res.success, res.message)
         return  α_best*c_s_r_oz + (1-α_best)*c_s_r
@@ -282,10 +284,10 @@ class HNC_solver():
     def total_err(self, c_s_r_matrix):
         c_s_k_matrix = self.FT_r_2_k_matrix(c_s_r_matrix)
         c_r_matrix = c_s_r_matrix - self.βu_l_r_matrix
-        c_k_matrix = self.FT_r_2_k_matrix(c_r_matrix)    
+        c_k_matrix = c_s_k_matrix - self.βu_l_k_matrix
 
         # oz_eqn = -self.h_k_matrix + c_k_matrix  + self.A_times_B(c_k_matrix, self.h_k_matrix*self.rho[:,np.newaxis,np.newaxis])
-        # C_matrix = self.rho[np.newaxis,:,np.newaxis] * c_k_matrix
+        C_matrix = self.rho[np.newaxis,:,np.newaxis] * c_k_matrix
         # oz_eqn = -self.h_k_matrix + c_k_matrix  + self.get_γs_k_matrix(c_k_matrix, C_matrix)+ self.βu_l_k_matrix
         # print(oz_eqn)
         # oz_err = np.linalg.norm(-self.h_k_matrix + c_s_k_matrix  + self.γs_k_matrix)/np.sqrt(self.N_bins*self.N_species**2)
@@ -299,12 +301,14 @@ class HNC_solver():
         hnc_err = np.linalg.norm(hnc_eqn)/np.sqrt(self.N_bins*self.N_species**2)
         tot_err = np.sqrt(oz_err**2 + hnc_err**2)
 
-        # h_r_matrix = c_k_matrix  + self.get_γs_k_matrix(c_k_matrix, C_matrix)+ self.βu_l_k_matrix
-        # h_r_matrix = np.where(h_r_matrix+1<1e-1, 1e-1, h_r_matrix)
+        h_k_matrix = c_s_k_matrix  + self.get_γs_k_matrix(c_k_matrix, C_matrix)#+ self.βu_l_k_matrix
+        h_r_matrix = self.FT_k_2_r_matrix(h_k_matrix)
         # tot_eqn =  1 + h_r_matrix  - np.exp(-self.βu_s_r_matrix + h_r_matrix - c_s_r_matrix )
+        tot_eqn =  1 + h_r_matrix  - np.exp(-self.βu_r_matrix + h_r_matrix - c_r_matrix )
         # tot_eqn = np.where( tot_eqn>1e5, 1e5 , tot_eqn)
         # tot_eqn = np.where( tot_eqn<-1e5, -1e5 , tot_eqn)
-        # tot_err = np.linalg.norm(tot_eqn) /np.sqrt(self.N_bins*self.N_species**2)
+        print(np.linalg.norm(tot_eqn) /np.sqrt(self.N_bins*self.N_species**2))
+        tot_err = np.linalg.norm(tot_eqn) /np.sqrt(self.N_bins*self.N_species**2)
 
         # print(" OZ: {0:.2e}, HNC: {1:.2e}, tot: {2:.2e} ".format(oz_err, hnc_err, tot_err))
         #print("tot: {0:.2e} ".format(tot_err))
@@ -333,17 +337,22 @@ class HNC_solver():
 
         converged = False
         iteration = 0
-        self.h_list, self.c_list = [], []
+        self.h_list, self.c_list, self.c_k_list = [], [], []
+        self.h_list.append(self.h_r_matrix.copy())            
+        self.c_list.append(self.c_r_matrix.copy())
+        self.c_k_list.append(self.c_k_matrix.copy())
         while not converged and iteration < self.num_iterations:
             # Compute matrices in k-space using OZ equation
             # if iteration>=0:
             self.set_γs_k_matrix()                           # 1. c_k, u_l_k -> γ_k   (Definition)
+
             self.γs_r_matrix = self.FT_k_2_r_matrix(self.γs_k_matrix) # γ_k        -> γ_r   (FT)     
             self.βω_r_matrix = self.βu_s_r_matrix - self.γs_r_matrix   # potential of mean force
             self.h_r_matrix = -1 + np.exp(self.γs_r_matrix - self.βu_s_r_matrix) # 2. γ_r,u_s_r  -> h_r   (HNC)   
             self.h_r_matrix = np.where(self.h_r_matrix>h_max, h_max, self.h_r_matrix)
             self.h_k_matrix = self.FT_r_2_k_matrix(self.h_r_matrix)
             # Plug into HNC equation
+
             new_c_s_r_matrix = self.h_r_matrix - self.γs_r_matrix # 3. h_r, γ_r   -> c_s_r (Ornstein-Zernicke)
             
             # Update h_r, c_r_matrix
@@ -355,19 +364,22 @@ class HNC_solver():
             self.c_r_matrix = self.c_s_r_matrix  - self.βu_l_r_matrix # 4. c_s, u_l   -> c_r_k (Definition)
             self.c_k_matrix = self.c_s_k_matrix  - self.βu_l_k_matrix# FT
             self.set_C_matrix()  # Update C = rho c    
-            
+
             self.h_list.append(self.h_r_matrix.copy())            
             self.c_list.append(self.c_r_matrix.copy())
+            self.c_k_list.append(self.c_k_matrix.copy())
 
             # oz_err = np.linalg.norm(-self.h_k_matrix + self.c_k_matrix  + self.A_times_B(self.c_k_matrix, self.h_k_matrix*self.rho[:,np.newaxis,np.newaxis]))/np.sqrt(self.N_bins*self.N_species**2)
             oz_err = np.linalg.norm(-self.h_k_matrix + self.c_s_k_matrix  + self.γs_k_matrix)/np.sqrt(self.N_bins*self.N_species**2)
             hnc_err = np.linalg.norm(- 1 - self.h_r_matrix   + np.exp( -self.βu_r_matrix + self.h_r_matrix - self.c_r_matrix ))/np.sqrt(self.N_bins*self.N_species**2)
                         # Compute change over iteration
+
+            tot_err = np.linalg.norm(- 1 - self.c_s_k_matrix  - self.γs_k_matrix   + np.exp( -self.βu_s_r_matrix  + self.γs_r_matrix  ))/np.sqrt(self.N_bins*self.N_species**2)
             err_c = np.linalg.norm(old_c_s_r_matrix - self.c_s_r_matrix) / np.sqrt(self.N_bins*self.N_species**2)
 
 
             if iteration%1==0:
-                print("{0}: Err in c_r: {1:.2e}, OZ: {2:.2e}, HNC: {3:.2e}".format(iteration,err_c, oz_err, hnc_err))
+                print("{0}: Err in c_r: {1:.2e}, OZ: {2:.2e}, HNC: {3:.2e}, tot: {4:.2f}".format(iteration,err_c, oz_err, hnc_err, tot_err))
             # print("Err in h_r: {0:.3f}".format(err_h))
             
             if isnan(err_c):
@@ -515,6 +527,35 @@ class HNC_solver():
                     axs[i,j].set_yscale('symlog',linthresh=0.1)
 
             axs[i,0].set_ylabel(r"$c(r/r_s)$",fontsize=20)
+
+        #axs[0,0].legend(fontsize=20)
+        
+        plt.show()
+
+    def plot_species_convergence_ck(self, n_slices=4):
+        fig, axs = plt.subplots(ncols=self.N_species, nrows=self.N_species, figsize=(10*self.N_species,6*self.N_species))
+        fig.suptitle("Direct Correlation Function Convergence Blue to Red" ,fontsize=20)
+
+        if type(axs) not in [list, np.ndarray, tuple]: 
+            axs=np.array([[axs]])
+
+        n = len(self.h_list)
+        indcs = [int(num)-1 for num in n/n_slices*np.arange(1,n_slices+1)]
+
+        for i in range(self.N_species):
+            for j in range(self.N_species):
+                for k in indcs:
+                    color = plt.cm.jet(k/n)
+                    axs[i,j].plot(self.k_array, self.c_k_list[k][i,j], color=color ,label='iter: {0}'.format(int(k)))
+                    axs[i,j].set_title(self.name_matrix[i][j] + r", $\Gamma_{{ {0},{1} }}$ = {2:.2f}".format(i,j,self.Gamma[i][j]) ,fontsize=15)
+                    # axs[i,j].set_xlim(0,10)
+                    axs[i,j].set_xscale('log')
+
+                    axs[i,j].tick_params(labelsize=20)
+                    axs[-1,j].set_xlabel(r"$k $",fontsize=20)
+                    axs[i,j].set_yscale('symlog',linthresh=0.1)
+
+            axs[i,0].set_ylabel(r"$c(k)$",fontsize=20)
 
         #axs[0,0].legend(fontsize=20)
         
