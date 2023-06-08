@@ -345,12 +345,7 @@ class HNC_solver():
             self.h_k_matrix = self.FT_r_2_k_matrix(self.h_r_matrix)
             # Plug into HNC equation
             new_c_s_r_matrix = self.h_r_matrix - self.γs_r_matrix # 3. h_r, γ_r   -> c_s_r (Ornstein-Zernicke)
-            # if iteration < 10 and self.N_species==2:
-            #     hee_r = self.h_r_matrix[1,1]
-            #     hee_k = self.h_k_matrix[1,1]
-            # elif iteration>=10 and self.N_species==2:
-            #     self.h_r_matrix[1,1] = hee_r 
-            #     self.h_k_matrix[1,1] = hee_k
+            
             # Update h_r, c_r_matrix
             old_c_s_r_matrix = self.c_s_r_matrix.copy()
             self.c_s_r_matrix = self.c_s_updater(old_c_s_r_matrix, new_c_s_r_matrix, method = alpha_method, alpha_Picard = alpha_Picard, alpha_oz = alpha_oz )

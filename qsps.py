@@ -21,13 +21,14 @@ aB = 5.29177210903e-11 # Bohr radius in m
 class QSP_HNC():
 
 
-    def __init__(self, Z, A, Zstar, Te, Ti, ri):
+    def __init__(self, Z, A, Zstar, Te, Ti, ri, which_Tij='thermal'):
         self.Z = Z
         self.A = A
         self.Zstar = Zstar
         self.Te = Te
         self.Ti = Ti
         self.ri = ri
+        self.which_Tij = which_Tij 
 
         self.initialize_physics(Z, A, Zstar, Te, Ti, ri)
 
@@ -41,7 +42,10 @@ class QSP_HNC():
         # Actual Temperatures and inverse temperatures
         self.βi  = 1/self.Ti
         self.βe  = 1/self.Te
-        self.Tie = self.Tei_thermal(Te, Ti)
+        if self.which_Tij=='thermal':
+            self.Tie = self.Tei_thermal(Te, Ti)
+        elif self.which_Tij=='geometric':
+            self.Tie = self.Tei_geometric(Te, Ti)
         self.βie = 1/self.Tie
 
         self.ne = self.Zstar*self.ni
@@ -55,13 +59,23 @@ class QSP_HNC():
         self.lambda_TF = np.sqrt( self.Te / (4*π*self.ne)  )
 
         #Construct effective electron temperatures. https://journals-aps-org.proxy.lib.umich.edu/prl/pdf/10.1103/PhysRevLett.84.959
-        self.Tq  = 0#self.E_F/(1.594 - 0.3160*np.sqrt(self.re) + 0.0240*self.re) #DMC
+        self.Tq  = self.E_F/(1.594 - 0.3160*np.sqrt(self.re) + 0.0240*self.re) #DMC
         # self.Tq  = self.E_F/(1.3251 - 0.1779*np.sqrt(self.re) + 0.0*self.re) #VMC
         self.Te_c  = self.make_Te(self.Te, self.Tq)
 
-        self.Tie_c = self.Tei_thermal(self.Te_c, self.Tq)
+
+        if self.which_Tij=='thermal':
+            self.Tie_c = self.Tei_thermal(self.Te_c, self.Tq)
+        elif self.which_Tij=='geometric':
+            self.Tie_c = self.Tei_geometric(self.Te_c, self.Tq)
+
         self.βe_c  = 1/self.Te_c
         self.βie_c = 1/self.Tie_c 
+        self.Tij = np.array([[self.Ti, self.Tie_c],
+                              [self.Tie_c, self.Te_c]])
+        self.μ = self.m_i*m_e/(m_e+self.m_i)
+        self.mij = np.array([[self.m_i, self.μ],
+                              [self.μ, m_e]])
 
         self.Λee  = 1/np.sqrt(π*m_e*self.Te_c )/self.ri
         self.Λei  = 1/np.sqrt(2*π*m_e*self.Tie_c )/self.ri
