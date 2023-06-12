@@ -12,10 +12,12 @@ from scipy.optimize import minimize
 
 
 class HNC_solver():
-    def __init__(self, N_species, Gamma, rho, dst_type=3, kappa = 1.0, kappa_multiscale = 1.0, tol=1e-4, num_iterations=1000, R_max=25.0, N_bins=512, names=None):
+    def __init__(self, N_species, Gamma, rho, temp_matrix, mass_matrix, dst_type=3, kappa = 1.0, kappa_multiscale = 1.0, tol=1e-4, num_iterations=1000, R_max=25.0, N_bins=512, names=None):
         self.N_species = N_species
         self.Gamma = Gamma
         self.rho = rho
+        self.Temp_matrix = temp_matrix
+        self.mass_list = mass_matrix
         self.kappa = kappa
         self.kappa_multiscale = kappa_multiscale
         self.num_iterations = num_iterations
@@ -315,6 +317,20 @@ class HNC_solver():
 
         return tot_err
     
+
+    def excess_energy_density(self):
+
+        u_matrix = self.βu_r_matrix*self.Temp_matrix[:,:,np.newaxis]
+        g_matrix = self.h_r_matrix+1
+        rho_matrix = self.rho[:,np.newaxis]*self.rho[np.newaxis,:]
+        r = self.r_array[np.newaxis,np.newaxis,:]
+        dr = self.del_r
+        potential_species_sum = np.sum(rho_matrix[:,:,np.newaxis]*u_matrix*g_matrix*r**2*dr)
+
+        u_ex = 2*π*potential_species_sum
+
+        return u_ex
+
     # Solver
     def HNC_solve(self, h_max=200, alpha_method='best', alpha_Picard = 0.1, alpha_oz = 0. ):
         """ 
@@ -338,6 +354,7 @@ class HNC_solver():
         converged = False
         iteration = 0
         self.h_list, self.c_list, self.c_k_list = [], [], []
+        self.u_ex_list = []
         self.h_list.append(self.h_r_matrix.copy())            
         self.c_list.append(self.c_r_matrix.copy())
         self.c_k_list.append(self.c_k_matrix.copy())
@@ -376,7 +393,8 @@ class HNC_solver():
 
             tot_err = np.linalg.norm(- 1 - self.c_s_k_matrix  - self.γs_k_matrix   + np.exp( -self.βu_s_r_matrix  + self.γs_r_matrix  ))/np.sqrt(self.N_bins*self.N_species**2)
             err_c = np.linalg.norm(old_c_s_r_matrix - self.c_s_r_matrix) / np.sqrt(self.N_bins*self.N_species**2)
-
+            u_ex = self.excess_energy_density()
+            self.u_ex_list.append(u_ex)
 
             if iteration%1==0:
                 print("{0}: Err in c_r: {1:.2e}, OZ: {2:.2e}, HNC: {3:.2e}, tot: {4:.2f}".format(iteration,err_c, oz_err, hnc_err, tot_err))
@@ -476,6 +494,21 @@ class HNC_solver():
         plt.tight_layout()
         # plt.show()
 
+    def plot_convergence_uex(self):
+        fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(10,6))
+        ax.plot(self.u_ex_list)
+        ax.set_title( "Excess Potential Energy Density" ,fontsize=15)
+        # ax.set_ylim(0, np.max(  [np.max(self.h_list[k][i,j]+1), 5]) )
+        # ax.set_xlim(0,41)
+        ax.tick_params(labelsize=20)
+        ax.set_xlabel("Iteration",fontsize=20)
+        
+        ax.set_ylabel(r"$u_{\rm ex} r_s^3$ [A.U.]",fontsize=20)
+
+        #axs[0,0].legend(fontsize=20)
+        
+        plt.show()
+
     def plot_species_convergence_g(self, n_slices=4):
         fig, axs = plt.subplots(ncols=self.N_species, nrows=self.N_species, figsize=(10*self.N_species,6*self.N_species))
         fig.suptitle("Radial Distribution Convergence Blue to Red" ,fontsize=20)
@@ -501,7 +534,7 @@ class HNC_solver():
             axs[i,0].set_ylabel(r"$g(r/r_s)$",fontsize=20)
 
         #axs[0,0].legend(fontsize=20)
-        
+
         plt.show()
 
     def plot_species_convergence_c(self, n_slices=4):
