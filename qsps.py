@@ -78,7 +78,9 @@ class QSP_HNC():
                               [self.μ, m_e]])
 
         self.Λee  = 1/np.sqrt(π*m_e*self.Te_c )/self.ri
-        self.Λei  = 1/np.sqrt(2*π*m_e*self.Tie_c )/self.ri
+        self.Λei  = 1/np.sqrt(2*π*m_e*self.Tie_c )/self.ri 
+        print("Λei = {0:.3f}".format(self.Λei))
+        self.Λei  = np.sqrt(  self.Λei**2 + 0.6**2 )
 
         print("Λee = {0:.3f}".format(self.Λee))
         print("Λei = {0:.3f}".format(self.Λei))
