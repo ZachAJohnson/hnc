@@ -21,18 +21,19 @@ aB = 5.29177210903e-11 # Bohr radius in m
 class QSP_HNC():
 
 
-    def __init__(self, Z, A, Zstar, Te, Ti, ri, which_Tij='thermal'):
+    def __init__(self, Z, A, Zstar, Te, Ti, ri, ne, which_Tij='thermal'):
         self.Z = Z
         self.A = A
         self.Zstar = Zstar
         self.Te = Te
         self.Ti = Ti
         self.ri = ri
+        self.ne = ne
         self.which_Tij = which_Tij 
 
-        self.initialize_physics(Z, A, Zstar, Te, Ti, ri)
+        self.initialize_physics(Z, A, Zstar, Te, Ti, ri, ne)
 
-    def initialize_physics(self, Z, A, Zstar, Te, Ti, ri):
+    def initialize_physics(self, Z, A, Zstar, Te, Ti, ri, ne):
         # [AU]
 
         self.ri = ri
@@ -48,7 +49,7 @@ class QSP_HNC():
             self.Tie = self.Tei_geometric(Te, Ti)
         self.βie = 1/self.Tie
 
-        self.ne = self.Zstar*self.ni
+        self.ne = ne#self.Zstar*self.ni
         self.re = self.rs_from_n(self.ne)
 
         self.E_F = 1/(2*m_e) * (3*π**2 * self.ne)**(2/3)

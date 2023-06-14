@@ -483,7 +483,7 @@ class HNC_solver():
         """ 
         Takes N species results and inverts it to find single effective v_ii for one species
         """
-        self.Neff_species = self.N_species - 1
+        self.Neff_species = self.N_species - len(removed_species)
         # First get new effective h matrix
         self.rhoeff        = np.delete(self.rho, removed_species)
         self.βωeff_r_matrix   = self.remove_species(self.βω_r_matrix, removed_species)
@@ -494,8 +494,8 @@ class HNC_solver():
         self.initialize_effective()
 
         # EXACT Ornstein-Zernike!
-        # I_plus_h_rho_inverse = self.invert_matrix(self.I[:-1,:-1,np.newaxis] + self.heff_k_matrix*self.rhoeff[:,np.newaxis,np.newaxis])
-        I_plus_h_rho_inverse = 1/(self.I[:self.Neff_species,:self.Neff_species, np.newaxis] + self.heff_k_matrix*self.rhoeff[:,np.newaxis,np.newaxis])
+        I_plus_h_rho_inverse = self.invert_matrix(self.I[:self.Neff_species,:self.Neff_species,np.newaxis] + self.heff_k_matrix*self.rhoeff[:,np.newaxis,np.newaxis])
+        # I_plus_h_rho_inverse = 1/(self.I[:self.Neff_species,:self.Neff_species, np.newaxis] + self.heff_k_matrix*self.rhoeff[:,np.newaxis,np.newaxis])
         self.ceff_k_matrix  =  self.A_times_B(I_plus_h_rho_inverse, self.heff_k_matrix)
         self.ceff_r_matrix = self.FT_k_2_r_matrix(self.ceff_k_matrix)
 
