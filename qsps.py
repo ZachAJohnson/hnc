@@ -80,10 +80,10 @@ class QSP_HNC():
         self.Λee  = 1/np.sqrt(π*m_e*self.Te_c )/self.ri
         self.Λei  = 1/np.sqrt(2*π*m_e*self.Tie_c )/self.ri 
         print("Λei = {0:.3f}".format(self.Λei))
-        self.Λei  = np.sqrt(  self.Λei**2 + 0.6**2 )
+        # self.Λei  = np.sqrt(  self.Λei**2 + 0.6**2 )
 
         print("Λee = {0:.3f}".format(self.Λee))
-        print("Λei = {0:.3f}".format(self.Λei))
+        print("Λei adjusted with R = {0:.3f}".format(self.Λei))
         self.Γee =  self.βe_c/self.ri 
         self.Γei = -self.Zstar*self.βie_c/self.ri
         self.Γii =  self.Zstar**2*self.βi/self.ri 
