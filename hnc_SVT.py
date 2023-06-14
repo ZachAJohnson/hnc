@@ -120,10 +120,10 @@ class HNC_solver():
 
     def initialize_c_k(self):
         self.c_k_matrix[:,:,:] = -self.βu_k_matrix[:,:,:]
+        self.c_r_matrix = self.FT_k_2_r_matrix(self.c_k_matrix)
         self.c_s_k_matrix = self.c_k_matrix + self.βu_l_k_matrix
         self.c_s_r_matrix = self.FT_k_2_r_matrix(self.c_s_k_matrix)
-        self.c_r_matrix   = self.c_s_k_matrix - self.βu_l_k_matrix
-  
+        
     # R and K space grid and Fourier Transforms
     def make_k_r_spaces(self):
         
@@ -208,6 +208,7 @@ class HNC_solver():
         """
         self.γs_k_matrix = self.get_γs_k_matrix(self.c_s_k_matrix)
 
+
     def get_γs_k_matrix(self, c_s_k_matrix):
         """
         Uses SVT method of OZ
@@ -219,27 +220,30 @@ class HNC_solver():
         c_k_matrix = c_s_k_matrix - self.βu_l_k_matrix
         C_matrix = self.rho[np.newaxis,:,np.newaxis] * c_k_matrix
         V = np.diag(self.Temp_list/self.mass_list) 
-        D = self.Temp_matrix[:,:,np.newaxis]/self.mass_list[:,np.newaxis, np.newaxis] * c_k_matrix
-        DT = D.transpose((1,0,2)) 
+        D = self.rho[np.newaxis,:,np.newaxis]*self.Temp_matrix[:,:,np.newaxis]/self.mass_list[:,np.newaxis, np.newaxis] * c_k_matrix
+        E = self.rho[:,np.newaxis,np.newaxis]*self.Temp_matrix[:,:,np.newaxis]/self.mass_list[np.newaxis, :, np.newaxis] * c_k_matrix
+        # DT = D.transpose((1,0,2)) 
         # E = self.Temp_matrix[:,:,np.newaxis]/self.mass_list[np.newaxis,:, np.newaxis] * c_k_matrix
         U = - self.βu_l_k_matrix * self.Temp_matrix[:,:,np.newaxis]/self.mass_matrix[:,:,np.newaxis]
         
-        A = V[:,:,np.newaxis]+D
-        B = V[:,:,np.newaxis]+DT
-        C = U - self.A_times_B(D, c_s_k_matrix) - self.A_times_B(c_s_k_matrix, DT)
+        A = V[:,:,np.newaxis] - D
+        B = V[:,:,np.newaxis] - E
+        C = U + self.A_times_B(D, c_s_k_matrix) + self.A_times_B(c_s_k_matrix, E)
     
         γs_k_matrix = np.zeros_like(self.γs_k_matrix)
         for k in range(self.N_bins):
-            γs_k_matrix_Sylv = solve_sylvester(A[:,:,k], B[:,:,k], C[:,:,k])
+            # γs_k_matrix_Sylv   = solve_sylvester(A[:,:,k], B[:,:,k], C[:,:,k])
             γs_k_matrix[:,:,k] = solve_continuous_lyapunov(A[:,:,k], C[:,:,k])
             
             # print(A[:,:,k]@γs_k_matrix[:,:,k] +γs_k_matrix[:,:,k]@B[:,:,k]-C[:,:,k] )
-            print("L: ", γs_k_matrix[:,:,k])
-            print("S: ", γs_k_matrix_Sylv)      
-            denominator = np.linalg.inv(self.I[:,:] - C_matrix[:,:,k])
-            numerator   = C_matrix[:,:,k]@c_s_k_matrix[:,:,k]  -  self.βu_l_k_matrix[:,:,k] 
-            γs_k_matrix_inv = denominator@numerator
-            print("Normal Inversion: ", γs_k_matrix_inv )
+            # print("L: ", γs_k_matrix[:,:,k])
+            # print("S: ", γs_k_matrix_Sylv)      
+            # denominator = np.linalg.inv(self.I[:,:] - C_matrix[:,:,k])
+            # numerator   = C_matrix[:,:,k]@c_s_k_matrix[:,:,k]  -  self.βu_l_k_matrix[:,:,k] 
+            # γs_k_matrix_inv = denominator@numerator
+            # print("L/N: ", γs_k_matrix[:,:,k]/γs_k_matrix_inv)
+            # γs_k_matrix[:,:,k] = γs_k_matrix_inv
+            # print("Normal Inversion: ", γs_k_matrix_inv )
         # print("asymm γs: ", set((self.γs_k_matrix[0,1,:]/self.γs_k_matrix[1,0,:]).flatten()))
         return γs_k_matrix
         
@@ -365,7 +369,11 @@ class HNC_solver():
 
         converged = False
         iteration = 0
-        self.h_list, self.c_list = [], []
+        self.h_list, self.c_list, self.c_k_list = [], [], []
+        self.u_ex_list = []
+        self.h_list.append(self.h_r_matrix.copy())            
+        self.c_list.append(self.c_r_matrix.copy())
+        self.c_k_list.append(self.c_k_matrix.copy())
         while not converged and iteration < self.num_iterations:
             # Compute matrices in k-space using OZ equation
             # if iteration>=0:
@@ -395,13 +403,13 @@ class HNC_solver():
             
             self.h_list.append(self.h_r_matrix.copy())            
             self.c_list.append(self.c_r_matrix.copy())
+            self.c_k_list.append(self.c_k_matrix.copy())
 
             # oz_err = np.linalg.norm(-self.h_k_matrix + self.c_k_matrix  + self.A_times_B(self.c_k_matrix, self.h_k_matrix*self.rho[:,np.newaxis,np.newaxis]))/np.sqrt(self.N_bins*self.N_species**2)
             oz_err = np.linalg.norm(-self.h_k_matrix + self.c_s_k_matrix  + self.γs_k_matrix)/np.sqrt(self.N_bins*self.N_species**2)
             hnc_err = np.linalg.norm(- 1 - self.h_r_matrix   + np.exp( -self.βu_r_matrix + self.h_r_matrix - self.c_r_matrix ))/np.sqrt(self.N_bins*self.N_species**2)
                         # Compute change over iteration
             err_c = np.linalg.norm(old_c_s_r_matrix - self.c_s_r_matrix) / np.sqrt(self.N_bins*self.N_species**2)
-
 
             if iteration%1==0:
                 print("{0}: Err in c_r: {1:.2e}, OZ: {2:.2e}, HNC: {3:.2e}".format(iteration,err_c, oz_err, hnc_err))
@@ -557,6 +565,34 @@ class HNC_solver():
         
         plt.show()
 
+    def plot_species_convergence_ck(self, n_slices=4):
+        fig, axs = plt.subplots(ncols=self.N_species, nrows=self.N_species, figsize=(10*self.N_species,6*self.N_species))
+        fig.suptitle("Direct Correlation Function Convergence Blue to Red" ,fontsize=20)
+
+        if type(axs) not in [list, np.ndarray, tuple]: 
+            axs=np.array([[axs]])
+
+        n = len(self.h_list)
+        indcs = [int(num)-1 for num in n/n_slices*np.arange(1,n_slices+1)]
+
+        for i in range(self.N_species):
+            for j in range(self.N_species):
+                for k in indcs:
+                    color = plt.cm.jet(k/n)
+                    axs[i,j].plot(self.k_array, self.c_k_list[k][i,j], color=color ,label='iter: {0}'.format(int(k)))
+                    axs[i,j].set_title(self.name_matrix[i][j] + r", $\Gamma_{{ {0},{1} }}$ = {2:.2f}".format(i,j,self.Gamma[i][j]) ,fontsize=15)
+                    # axs[i,j].set_xlim(0,10)
+                    axs[i,j].set_xscale('log')
+
+                    axs[i,j].tick_params(labelsize=20)
+                    axs[-1,j].set_xlabel(r"$k $",fontsize=20)
+                    axs[i,j].set_yscale('symlog',linthresh=0.1)
+
+            axs[i,0].set_ylabel(r"$c(k)$",fontsize=20)
+
+        #axs[0,0].legend(fontsize=20)
+        
+        plt.show()
     def plot_g_grid(self):
         fig, axs = plt.subplots(ncols=self.N_species, nrows=self.N_species, figsize=(8*self.N_species,4*self.N_species))
         fig.suptitle("Radial Distribution Function for all Species",fontsize=20,y=1)
