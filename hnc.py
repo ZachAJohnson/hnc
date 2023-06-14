@@ -382,7 +382,7 @@ class HNC_solver():
         return u_ex
 
     # Solver
-    def HNC_solve(self, h_max=200, alpha_method='best', alpha_Picard = 0.1, alpha_oz = 0. ):
+    def HNC_solve(self, h_max=200, alpha_method='best', alpha_Picard = 0.1, alpha_oz = 0., iters_to_check=10 ):
         """ 
         Integral equation solutions for the classical electron gas 
         J. F. Springer; M. A. Pokrant; F. A. Stevens, Jr.
@@ -402,7 +402,9 @@ class HNC_solver():
         """
 
         converged = False
+        decreasing = True
         iteration = 0
+        self.tot_err_list = []
         self.h_list, self.c_list, self.c_k_list = [], [], []
         self.u_ex_list = []
         self.h_list.append(self.h_r_matrix.copy())            
@@ -447,10 +449,19 @@ class HNC_solver():
             self.u_ex_list.append(u_ex)
 
             actual_tot_err = self.total_err(self.c_s_r_matrix)
+            self.tot_err_list.append(actual_tot_err)
             if iteration%1==0:
                 print("{0}: Err in c_r: {1:.2e}, OZ: {2:.2e}, HNC: {3:.2e}, tot: {4:.2e}, tot: {5:.2e}".format(iteration,err_c, oz_err, hnc_err, tot_err, actual_tot_err))
             # print("Err in h_r: {0:.3f}".format(err_h))
             
+            if len(self.tot_err_list) > iters_to_check:
+                Δ_err = np.array(self.tot_err_list[-iters_to_check:-2]) - np.array(self.tot_err_list[-iters_to_check + 1:-1])
+                if all( Δ_err < 0 ):
+                    decreasing = False
+                    print("CONVERGENCE ERROR: Last {0} iterations error has been increasing".format(iters_to_check))
+                    converged=False
+                    break
+
             if isnan(err_c):
                 print("ERROR: c_r is nan.")
                 break
@@ -462,6 +473,7 @@ class HNC_solver():
 
         if not converged:
             print("Warning: HNC_solver did not converge within the specified number of iterations.")
+        return converged
 
     # HNC Inverter
     @staticmethod
