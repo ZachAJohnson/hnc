@@ -7,17 +7,18 @@ from math import isnan
 from pandas import read_csv
 
 from scipy.optimize import minimize
+from scipy.linalg import solve_sylvester, solve_continuous_lyapunov
 
 π = np.pi
 
 
 class HNC_solver():
-    def __init__(self, N_species, Gamma, rho, temp_matrix, mass_matrix, dst_type=3, kappa = 1.0, kappa_multiscale = 1.0, tol=1e-4, num_iterations=1000, R_max=25.0, N_bins=512, names=None):
+    def __init__(self, N_species, Gamma, rho, temps, masses, dst_type=3, oz_method='standard',kappa = 1.0, kappa_multiscale = 1.0, tol=1e-4, num_iterations=1000, R_max=25.0, N_bins=512, names=None):
         self.N_species = N_species
         self.Gamma = Gamma
         self.rho = rho
-        self.Temp_matrix = temp_matrix
-        self.mass_list = mass_matrix
+        self.Temp_list = temps
+        self.mass_list = masses
         self.kappa = kappa
         self.kappa_multiscale = kappa_multiscale
         self.num_iterations = num_iterations
@@ -25,6 +26,10 @@ class HNC_solver():
         self.R_max = R_max
         self.N_bins = N_bins
         self.dst_type = dst_type
+        self.oz_method = oz_method
+
+        self.Temp_matrix = (self.mass_list[:,np.newaxis]*self.Temp_list[np.newaxis,:] + self.mass_list[np.newaxis,:]*self.Temp_list[:,np.newaxis])/(self.mass_list[:,np.newaxis] + self.mass_list[np.newaxis,:])
+        self.mass_matrix = (self.mass_list[:,np.newaxis]*self.mass_list[np.newaxis,:])/(self.mass_list[:,np.newaxis] + self.mass_list[np.newaxis,:])
 
         self.I = np.eye(N_species)
         
@@ -201,21 +206,55 @@ class HNC_solver():
     def set_γs_k_matrix(self):
         """
         invert N_species x N_species  matrix equation to get γ_k = h_k - c_k
-        γs_k = (I-C)^-1 (C c_k_s - u_s_k)
+        Two methods implemented, normal OZ and SVT-OZ
         """
-        self.γs_k_matrix = self.get_γs_k_matrix(self.c_s_k_matrix, self.C_matrix)
+        self.γs_k_matrix = self.get_γs_k_matrix(self.c_s_k_matrix)
+        
 
-    def get_γs_k_matrix(self, c_s_k_matrix, C_matrix):
+    def get_γs_k_matrix(self, c_s_k_matrix):
+        if self.oz_method=='standard':
+            γs_k_matrix = self.get_γs_k_matrix_standard(c_s_k_matrix)
+        elif self.oz_method in ['svt','SVT']:
+            γs_k_matrix = self.get_γs_k_matrix_SVT(c_s_k_matrix)
+        return γs_k_matrix
+
+    def get_γs_k_matrix_standard(self, c_s_k_matrix):
         """
         invert N_species x N_species  matrix equation to get γ_k = h_k - c_k
         γs_k = (I-C)^-1 (C c_k_s - u_s_k)
         """
+        c_k_matrix = c_s_k_matrix - self.βu_l_k_matrix
+        C_matrix = self.rho[np.newaxis,:,np.newaxis] * c_k_matrix
         denominator = self.invert_matrix(self.I[:,:,np.newaxis] - C_matrix)
         numerator   = self.A_times_B(C_matrix, c_s_k_matrix ) -  self.βu_l_k_matrix 
         γs_k_matrix = self.A_times_B(denominator, numerator )
         return γs_k_matrix
         # print("asymm γs: ", set((self.γs_k_matrix[0,1,:]/self.γs_k_matrix[1,0,:]).flatten()))
+  
 
+    def get_γs_k_matrix_SVT(self, c_s_k_matrix):
+        """
+        Uses SVT method of OZ
+        γ = h-c 
+        
+        (V+D)γs + γs(V+E) = U - D cs - cs E 
+        """
+        c_k_matrix = c_s_k_matrix - self.βu_l_k_matrix
+        V = np.diag(self.Temp_list/self.mass_list) 
+        D = self.rho[np.newaxis,:,np.newaxis]*self.Temp_matrix[:,:,np.newaxis]/self.mass_list[:,np.newaxis, np.newaxis] * c_k_matrix
+        E = self.rho[:,np.newaxis,np.newaxis]*self.Temp_matrix[:,:,np.newaxis]/self.mass_list[np.newaxis, :, np.newaxis] * c_k_matrix
+        U = - self.βu_l_k_matrix * self.Temp_matrix[:,:,np.newaxis]/self.mass_matrix[:,:,np.newaxis]
+        
+        A = V[:,:,np.newaxis] - D
+        B = V[:,:,np.newaxis] - E
+        C = U + self.A_times_B(D, c_s_k_matrix) + self.A_times_B(c_s_k_matrix, E)
+    
+        γs_k_matrix = np.zeros_like(self.γs_k_matrix)
+        for k in range(self.N_bins):
+            γs_k_matrix[:,:,k]   = solve_sylvester(A[:,:,k], B[:,:,k], C[:,:,k])
+            # γs_k_matrix[:,:,k] = solve_continuous_lyapunov(A[:,:,k], C[:,:,k])
+        return γs_k_matrix
+        
     # Matrix Manipulation
     def invert_matrix(self, A_matrix):
         """
@@ -242,11 +281,12 @@ class HNC_solver():
         return old*(1-alpha) + new*alpha
 
     def c_s_updater(self, c_s_r_old, c_s_r_new, method='best', alpha_Picard = 0.1, alpha_oz = 0. ):
+        if len(self.c_list)<3:
+            method = 'fixed'
         if method=='best' or alpha_oz > 0.0:
             # c_s_r_oz =  self.FT_k_2_r_matrix(self.h_k_matrix  - self.γs_k_matrix)
             I_plus_h_rho_inverse = self.invert_matrix(self.I[:,:,np.newaxis] + self.h_k_matrix*self.rho[:,np.newaxis,np.newaxis])
             c_s_r_oz = self.FT_k_2_r_matrix(self.A_times_B(I_plus_h_rho_inverse, self.h_k_matrix))
-
         if method=='best':
             c_s_r = self.c_s_find_best_alpha(c_s_r_old, c_s_r_new, c_s_r_oz)
         elif method=='fixed':
@@ -256,63 +296,73 @@ class HNC_solver():
 
         return c_s_r
 
-    def c_s_find_best_alpha(self, c_s_r_old, c_s_r_new, c_s_r_oz):
+    # def c_s_find_best_alpha(self, c_s_r_old, c_s_r_new, c_s_r_oz):
         
-        def c_err_1(α):
-            c_s = α*c_s_r_new + (1-α)*c_s_r_old
+    #     def c_err_1(α):
+    #         c_s = α*c_s_r_new + (1-α)*c_s_r_old
+    #         err = self.total_err(c_s)
+    #         # print("new_err: ", self.total_err(c_s_r_new))
+    #         print("HNC α: {0:.3e}, c_err: {1:.5e} ".format(float(α), err))
+    #         return err
+
+    #     def c_err_2(α):
+    #         c_s = α*c_s_r_oz + (1-α)*c_s_r
+    #         err = self.total_err(c_s)
+    #         # print("α: {0:.1e}, c_err call: {1:.1e}".format(float(α), err))
+    #         return err
+    #     α_bounds = (0, 1.2)
+    #     α_guesses = np.linspace(α_bounds[0], α_bounds[1],num=5)#np.array([0.1, 0.2, 0.5, 0.8, 1.0])
+    #     α_best_initial = α_guesses[ np.argmin( [ c_err_1(α) for α in α_guesses] ) ]
+    #     print("α_best initial guess: ", α_best_initial)
+
+    #     method='L-BFGS-B'
+    #     method='SLSQP'
+    #     method='Nelder-Mead'
+    #     tol=1e-6
+    #     res = minimize(c_err_1, [α_best_initial], bounds = [α_bounds], tol=tol, options={'maxiter':int(1e2)}, method=method) #, constraints=constraints, method='COBYLA')#bounds=[(ε, 1-ε),(ε, 1-ε),(ε, 1-ε)]
+    #     α_best = res.x
+    #     print(" HNC min:", res.x, res.success, res.message)
+    #     c_s_r = α_best*c_s_r_new + (1-α_best)*c_s_r_old
+    #     # res = minimize(c_err_2, [0.01], bounds=[(0,0.1)], tol=tol, options={'maxiter':int(1e2)}, method=method)#, constraints=constraints, method='COBYLA')#bounds=[(ε, 1-ε),(ε, 1-ε),(ε, 1-ε)]
+    #     # α_best = res.x
+    #     # print(" OZ min: ", res.x, res.success, res.message)
+    #     return  c_s_r #α_best*c_s_r_oz + (1-α_best)*c_s_r
+
+    def c_s_find_best_alpha(self, c_s_r_old, c_s_r_new, c_s_r_oz):
+        c_s_list = self.c_list + self.βu_l_k_matrix
+        def c_err_1(αs):
+            c_s = (1-sum(αs))*c_s_r_new + αs[0]*c_s_list[-1] + αs[1]*c_s_list[-2] + αs[2]*c_s_list[-3]
             err = self.total_err(c_s)
-            print("HNC α: {0:.1e}, c_err: {1:.1e} ".format(float(α), err))
+            # print("new_err: ", self.total_err(c_s_r_new))
+            print("HNC αs: {0}, c_err: {1:.5e} ".format(np.array(αs), err))
             return err
 
-        def c_err_2(α):
-            c_s = α*c_s_r_oz + (1-α)*c_s_r
-            err = self.total_err(c_s)
-            # print("α: {0:.1e}, c_err call: {1:.1e}".format(float(α), err))
-            return err
-
+        α_bounds = (0, 1)
+        
         method='L-BFGS-B'
         method='SLSQP'
         method='Nelder-Mead'
-        tol=1e-8
-        res = minimize(c_err_1, [0.01], bounds=[(1e-5,1.2)], tol=tol, options={'maxiter':int(1e2)}, method=method) #, constraints=constraints, method='COBYLA')#bounds=[(ε, 1-ε),(ε, 1-ε),(ε, 1-ε)]
-        α_best = res.x
+        tol=1e-6
+        res = minimize(c_err_1, [1,0,0], bounds = [(0,1),(0,1),(0,1)], tol=tol, options={'maxiter':int(1e2)}, method=method) #, constraints=constraints, method='COBYLA')#bounds=[(ε, 1-ε),(ε, 1-ε),(ε, 1-ε)]
+        αs = res.x
         print(" HNC min:", res.x, res.success, res.message)
-        c_s_r = α_best*c_s_r_new + (1-α_best)*c_s_r_old
-        res = minimize(c_err_2, [0.01], bounds=[(0,1.2)], tol=tol, options={'maxiter':int(1e2)}, method=method)#, constraints=constraints, method='COBYLA')#bounds=[(ε, 1-ε),(ε, 1-ε),(ε, 1-ε)]
-        α_best = res.x
-        print(" OZ min: ", res.x, res.success, res.message)
-        return  α_best*c_s_r_oz + (1-α_best)*c_s_r
+        c_s_r = (1-sum(αs))*c_s_r_new + αs[0]*c_s_list[-1] + αs[1]*c_s_list[-2] + αs[2]*c_s_list[-3]
+        return  c_s_r 
 
     def total_err(self, c_s_r_matrix):
         c_s_k_matrix = self.FT_r_2_k_matrix(c_s_r_matrix)
         c_r_matrix = c_s_r_matrix - self.βu_l_r_matrix
         c_k_matrix = c_s_k_matrix - self.βu_l_k_matrix
 
-        # oz_eqn = -self.h_k_matrix + c_k_matrix  + self.A_times_B(c_k_matrix, self.h_k_matrix*self.rho[:,np.newaxis,np.newaxis])
         C_matrix = self.rho[np.newaxis,:,np.newaxis] * c_k_matrix
-        # oz_eqn = -self.h_k_matrix + c_k_matrix  + self.get_γs_k_matrix(c_k_matrix, C_matrix)+ self.βu_l_k_matrix
-        # print(oz_eqn)
-        # oz_err = np.linalg.norm(-self.h_k_matrix + c_s_k_matrix  + self.γs_k_matrix)/np.sqrt(self.N_bins*self.N_species**2)
-        # oz_err = np.linalg.norm(np.where( oz_eqn>1e3, 1e3, oz_eqn)) /np.sqrt(self.N_bins*self.N_species**2)
-        # oz_err = np.linalg.norm(np.where( oz_eqn<-1e3, -1e3 , oz_eqn)) /np.sqrt(self.N_bins*self.N_species**2)
-        # oz_err=0
-        # oz_err = np.linalg.norm(oz_eqn) /np.sqrt(self.N_bins*self.N_species**2)
-        oz_err = 0
-        hnc_eqn = - 1 - self.h_r_matrix   + np.exp( -self.βu_s_r_matrix + self.h_r_matrix - c_s_r_matrix )
-        # hnc_err = np.linalg.norm(np.where( hnc_eqn>1e5, 1e5 ,hnc_eqn) )/np.sqrt(self.N_bins*self.N_species**2)
-        hnc_err = np.linalg.norm(hnc_eqn)/np.sqrt(self.N_bins*self.N_species**2)
-        tot_err = np.sqrt(oz_err**2 + hnc_err**2)
-
-        h_k_matrix = c_s_k_matrix  + self.get_γs_k_matrix(c_k_matrix, C_matrix)#+ self.βu_l_k_matrix
+        γs_k_matrix = self.get_γs_k_matrix(c_s_k_matrix)
+        h_k_matrix = c_s_k_matrix  + γs_k_matrix
         h_r_matrix = self.FT_k_2_r_matrix(h_k_matrix)
-        # tot_eqn =  1 + h_r_matrix  - np.exp(-self.βu_s_r_matrix + h_r_matrix - c_s_r_matrix )
-        tot_eqn =  1 + h_r_matrix  - np.exp(-self.βu_r_matrix + h_r_matrix - c_r_matrix )
-        # tot_eqn = np.where( tot_eqn>1e5, 1e5 , tot_eqn)
-        # tot_eqn = np.where( tot_eqn<-1e5, -1e5 , tot_eqn)
-        print(np.linalg.norm(tot_eqn) /np.sqrt(self.N_bins*self.N_species**2))
+
+        tot_eqn =  1 + h_r_matrix  - np.exp(-self.βu_s_r_matrix + h_r_matrix - c_s_r_matrix )
+        
         tot_err = np.linalg.norm(tot_eqn) /np.sqrt(self.N_bins*self.N_species**2)
 
-        # print(" OZ: {0:.2e}, HNC: {1:.2e}, tot: {2:.2e} ".format(oz_err, hnc_err, tot_err))
         #print("tot: {0:.2e} ".format(tot_err))
 
         return tot_err
@@ -391,13 +441,14 @@ class HNC_solver():
             hnc_err = np.linalg.norm(- 1 - self.h_r_matrix   + np.exp( -self.βu_r_matrix + self.h_r_matrix - self.c_r_matrix ))/np.sqrt(self.N_bins*self.N_species**2)
                         # Compute change over iteration
 
-            tot_err = np.linalg.norm(- 1 - self.c_s_k_matrix  - self.γs_k_matrix   + np.exp( -self.βu_s_r_matrix  + self.γs_r_matrix  ))/np.sqrt(self.N_bins*self.N_species**2)
+            tot_err = np.linalg.norm(- 1 - self.c_s_r_matrix  - self.γs_r_matrix   + np.exp( -self.βu_s_r_matrix  + self.γs_r_matrix  ))/np.sqrt(self.N_bins*self.N_species**2)
             err_c = np.linalg.norm(old_c_s_r_matrix - self.c_s_r_matrix) / np.sqrt(self.N_bins*self.N_species**2)
             u_ex = self.excess_energy_density()
             self.u_ex_list.append(u_ex)
 
+            actual_tot_err = self.total_err(self.c_s_r_matrix)
             if iteration%1==0:
-                print("{0}: Err in c_r: {1:.2e}, OZ: {2:.2e}, HNC: {3:.2e}, tot: {4:.2f}".format(iteration,err_c, oz_err, hnc_err, tot_err))
+                print("{0}: Err in c_r: {1:.2e}, OZ: {2:.2e}, HNC: {3:.2e}, tot: {4:.2e}, tot: {5:.2e}".format(iteration,err_c, oz_err, hnc_err, tot_err, actual_tot_err))
             # print("Err in h_r: {0:.3f}".format(err_h))
             
             if isnan(err_c):
@@ -444,7 +495,7 @@ class HNC_solver():
 
         # EXACT Ornstein-Zernike!
         # I_plus_h_rho_inverse = self.invert_matrix(self.I[:-1,:-1,np.newaxis] + self.heff_k_matrix*self.rhoeff[:,np.newaxis,np.newaxis])
-        I_plus_h_rho_inverse = 1/(self.I[:-1,:-1,np.newaxis] + self.heff_k_matrix*self.rhoeff[:,np.newaxis,np.newaxis])
+        I_plus_h_rho_inverse = 1/(self.I[:self.Neff_species,:self.Neff_species, np.newaxis] + self.heff_k_matrix*self.rhoeff[:,np.newaxis,np.newaxis])
         self.ceff_k_matrix  =  self.A_times_B(I_plus_h_rho_inverse, self.heff_k_matrix)
         self.ceff_r_matrix = self.FT_k_2_r_matrix(self.ceff_k_matrix)
 

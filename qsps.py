@@ -110,6 +110,10 @@ class QSP_HNC():
     def rs_from_n(n):
         return (4/3*π*n)**(-1/3)
 
+    def get_κ(self):
+        kTF = np.sqrt(  4*π*self.ne  /self.Te_c  )
+        return kTF*self.ri
+
     def Tei_geometric(self, Te, Ti):
         return np.sqrt(Te*Ti)
 
