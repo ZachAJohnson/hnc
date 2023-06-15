@@ -114,7 +114,6 @@ class HNC_solver():
         self.c_s_k_matrix = self.c_k_matrix + self.βu_l_k_matrix
         self.c_s_r_matrix = self.FT_k_2_r_matrix(self.c_s_k_matrix)
 
-
     def initialize_βu_matrix(self):
         self.set_βu_matrix(self.Gamma[:,:,np.newaxis]*(np.exp(- self.kappa * self.r_array) / self.r_array)[np.newaxis, np.newaxis,:])
 
@@ -125,7 +124,6 @@ class HNC_solver():
         self.c_s_r_matrix = self.FT_k_2_r_matrix(self.c_s_k_matrix)
         # self.c_r_matrix   = self.c_s_k_matrix - self.βu_l_k_matrix
 
-  
     # R and K space grid and Fourier Transforms
     def make_k_r_spaces(self):
         
@@ -296,38 +294,6 @@ class HNC_solver():
 
         return c_s_r
 
-    # def c_s_find_best_alpha(self, c_s_r_old, c_s_r_new, c_s_r_oz):
-        
-    #     def c_err_1(α):
-    #         c_s = α*c_s_r_new + (1-α)*c_s_r_old
-    #         err = self.total_err(c_s)
-    #         # print("new_err: ", self.total_err(c_s_r_new))
-    #         print("HNC α: {0:.3e}, c_err: {1:.5e} ".format(float(α), err))
-    #         return err
-
-    #     def c_err_2(α):
-    #         c_s = α*c_s_r_oz + (1-α)*c_s_r
-    #         err = self.total_err(c_s)
-    #         # print("α: {0:.1e}, c_err call: {1:.1e}".format(float(α), err))
-    #         return err
-    #     α_bounds = (0, 1.2)
-    #     α_guesses = np.linspace(α_bounds[0], α_bounds[1],num=5)#np.array([0.1, 0.2, 0.5, 0.8, 1.0])
-    #     α_best_initial = α_guesses[ np.argmin( [ c_err_1(α) for α in α_guesses] ) ]
-    #     print("α_best initial guess: ", α_best_initial)
-
-    #     method='L-BFGS-B'
-    #     method='SLSQP'
-    #     method='Nelder-Mead'
-    #     tol=1e-6
-    #     res = minimize(c_err_1, [α_best_initial], bounds = [α_bounds], tol=tol, options={'maxiter':int(1e2)}, method=method) #, constraints=constraints, method='COBYLA')#bounds=[(ε, 1-ε),(ε, 1-ε),(ε, 1-ε)]
-    #     α_best = res.x
-    #     print(" HNC min:", res.x, res.success, res.message)
-    #     c_s_r = α_best*c_s_r_new + (1-α_best)*c_s_r_old
-    #     # res = minimize(c_err_2, [0.01], bounds=[(0,0.1)], tol=tol, options={'maxiter':int(1e2)}, method=method)#, constraints=constraints, method='COBYLA')#bounds=[(ε, 1-ε),(ε, 1-ε),(ε, 1-ε)]
-    #     # α_best = res.x
-    #     # print(" OZ min: ", res.x, res.success, res.message)
-    #     return  c_s_r #α_best*c_s_r_oz + (1-α_best)*c_s_r
-
     def c_s_find_best_alpha(self, c_s_r_old, c_s_r_new, c_s_r_oz):
         c_s_list = self.c_list + self.βu_l_k_matrix
         def c_err_1(αs):
@@ -401,7 +367,7 @@ class HNC_solver():
             None
         """
 
-        converged = False
+        converged = 1
         decreasing = True
         iteration = 0
         self.tot_err_list = []
@@ -410,7 +376,7 @@ class HNC_solver():
         self.h_list.append(self.h_r_matrix.copy())            
         self.c_list.append(self.c_r_matrix.copy())
         self.c_k_list.append(self.c_k_matrix.copy())
-        while not converged and iteration < self.num_iterations:
+        while converged!=0 and iteration < self.num_iterations:
             # Compute matrices in k-space using OZ equation
             # if iteration>=0:
             self.set_γs_k_matrix()                           # 1. c_k, u_l_k -> γ_k   (Definition)
@@ -458,20 +424,26 @@ class HNC_solver():
                 Δ_err = np.array(self.tot_err_list[-iters_to_check:-2]) - np.array(self.tot_err_list[-iters_to_check + 1:-1])
                 if all( Δ_err < 0 ):
                     decreasing = False
-                    print("CONVERGENCE ERROR: Last {0} iterations error has been increasing".format(iters_to_check))
-                    converged=False
+                    print("QUIT: Last {0} iterations error has been increasing".format(iters_to_check))
+                    converged=2
                     break
 
+            if iteration >  200 and actual_tot_err > 1e2:
+                print("QUIT: Large Error at many iterations, quitting")
+                converged=3
+                break
+
             if isnan(err_c):
-                print("ERROR: c_r is nan.")
+                print("QUIT: c_r is nan.")
                 break
 
             if err_c < self.tol:
-                converged = True
+                converged = 0
 
             iteration += 1
 
-        if not converged:
+        if converged !=0 :
+            converged=1
             print("Warning: HNC_solver did not converge within the specified number of iterations.")
         return converged
 

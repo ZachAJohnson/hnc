@@ -21,7 +21,7 @@ aB = 5.29177210903e-11 # Bohr radius in m
 class QSP_HNC():
 
 
-    def __init__(self, Z, A, Zstar, Te, Ti, ri, ne, which_Tij='thermal'):
+    def __init__(self, Z, A, Zstar, Te, Ti, ri, ne, which_Tij='thermal', r_c = 3/5):
         self.Z = Z
         self.A = A
         self.Zstar = Zstar
@@ -29,6 +29,7 @@ class QSP_HNC():
         self.Ti = Ti
         self.ri = ri
         self.ne = ne
+        self.r_c = r_c
         self.which_Tij = which_Tij 
 
         self.initialize_physics(Z, A, Zstar, Te, Ti, ri, ne)
@@ -142,7 +143,6 @@ class QSP_HNC():
     #     # Jones + Murillo Eqn.
     #     return  -np.log(1-0.5*np.exp(-2*π*r**2/Λe_star**2))
 
-
     ######### Build Actual QSP's
 
     def βvee(self, r):
@@ -152,8 +152,11 @@ class QSP_HNC():
         return self.βv_Deutsch(self.Γei,r,self.Λei) #+ (Z-Zstar)*βv_Pauli(r)
 
     def βvei_atomic(self, r):
-        r_c = 3/5 #3/5 r_s in linear n_b(r) model
-        return np.heaviside(r - r_c,0.5) * self.βvei(r) + self.βvei(r_c)*np.heaviside(r_c - r,0.5)
+        r_c  = self.r_c #3/5 r_s in linear n_b(r) model
+        Λ, Γ = self.Λei, self.Γei
+        one_over_r_cutoff = np.heaviside(r - r_c, 0.5)/r + np.heaviside(r_c - r,0.5)/r_c
+        vei_pseudopotential = Γ*one_over_r_cutoff
+        return vei_pseudopotential * ( 1 -  np.exp(-r/Λ) )
 
     def βvii(self, r):
         return self.Γii/r 
