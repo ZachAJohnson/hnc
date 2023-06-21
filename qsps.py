@@ -58,13 +58,12 @@ class QSP_HNC():
         self.k_F = self.v_F*m_e
         self.θ   = self.Te/self.E_F
 
-        self.lambda_TF = np.sqrt( self.Te / (4*π*self.ne)  )
-
         #Construct effective electron temperatures. https://journals-aps-org.proxy.lib.umich.edu/prl/pdf/10.1103/PhysRevLett.84.959
         self.Tq  = self.E_F/(1.594 - 0.3160*np.sqrt(self.re) + 0.0240*self.re) #DMC
         # self.Tq  = self.E_F/(1.3251 - 0.1779*np.sqrt(self.re) + 0.0*self.re) #VMC
         self.Te_c  = self.make_Te(self.Te, self.Tq)
 
+        self.lambda_TF = np.sqrt( self.Te / (4*π*self.ne)  )
 
         if self.which_Tij=='thermal':
             self.Tie_c = self.Tei_thermal(self.Te_c, self.Tq)
@@ -93,10 +92,10 @@ class QSP_HNC():
         self.Γ_matrix = np.array(  [[self.Γii,  self.Γei],
                                     [self.Γei,  self.Γee]])
  
-
         print("Γii={0:.3f}, Γie={1:.3f}, Γee={2:.3f} ".format(self.Γii, self.Γei, self.Γee))
         print("r_i={0:.3f}".format(self.ri))
         print("r_e={0:.3f}".format(self.re))
+        print("r_c={0:.3f}".format(self.r_c))
         print("θ  ={0:.2e}".format(self.θ))
 
     @staticmethod
@@ -139,10 +138,7 @@ class QSP_HNC():
         #return -np.log(1 - 0.5*np.exp(-r**2/(2*π*Λe**2)) )
         return np.log(2)*np.exp(-r**2/(π*np.log(2)*Λ**2))
 
-    # def βv_Pauli(r):
-    #     # Jones + Murillo Eqn.
-    #     return  -np.log(1-0.5*np.exp(-2*π*r**2/Λe_star**2))
-
+    
     ######### Build Actual QSP's
 
     def βvee(self, r):
@@ -151,10 +147,10 @@ class QSP_HNC():
     def βvei(self, r):
         return self.βv_Deutsch(self.Γei,r,self.Λei) #+ (Z-Zstar)*βv_Pauli(r)
 
-    def βvei_atomic(self, r):
+    def βvei_atomic(self, r, core_height=0):
         r_c  = self.r_c #3/5 r_s in linear n_b(r) model
         Λ, Γ = self.Λei, self.Γei
-        one_over_r_cutoff = np.heaviside(r - r_c, 0.5)/r + np.heaviside(r_c - r,0.5)/r_c
+        one_over_r_cutoff = np.heaviside(r - r_c, 0.5)/r + core_height/r_c * np.heaviside(r_c - r,0.5)
         vei_pseudopotential = Γ*one_over_r_cutoff
         return vei_pseudopotential * ( 1 -  np.exp(-r/Λ) )
 

@@ -1,5 +1,7 @@
 import numpy as np
 from scipy import fftpack
+from scipy.sparse.linalg import gmres
+
 import matplotlib.pyplot as plt
 
 from math import isnan
@@ -347,6 +349,39 @@ class HNC_solver():
         u_ex = 2*π*potential_species_sum
 
         return u_ex
+
+    def get_new_c_k_matrix(self, c_s_k_matrix):
+        γs_k_matrix = self.get_γs_k_matrix(c_s_k_matrix)                           # 1. c_k, u_l_k -> γ_k   (Definition)
+
+        γs_r_matrix = self.FT_k_2_r_matrix(γs_k_matrix) # γ_k        -> γ_r   (FT)     
+        h_r_matrix = -1 + np.exp(γs_r_matrix - βu_s_r_matrix) # 2. γ_r,u_s_r  -> h_r   (HNC)   
+        h_r_matrix = np.where(h_r_matrix>h_max, h_max, h_r_matrix)
+        h_k_matrix = self.FT_r_2_k_matrix(h_r_matrix)
+        # Plug into HNC equation
+
+        new_c_s_r_matrix = h_r_matrix - γs_r_matrix # 3. h_r, γ_r   -> c_s_r (Ornstein-Zernicke)
+        new_c_s_k_matrix = self.FT_r_2_k_matrix(new_c_s_r_matrix)
+        return new_c_s_k_matrix
+
+    def HNC_GMRES_solve(self, h_max=200, alpha_method='best'):
+        gmres_matrix_size = self.N_species**2*self.N_bins
+
+        def A_matrix(c_s_k_flat):
+            c_s_k_matrix = c_s_k_flat.reshape(self.N_species, self.N_species, self.N_bins)
+            return self.get_new_c_k_matrix(c_s_k_matrix)
+
+        
+
+
+        A = LinearOperator((gmres_matrix_size, gmres_matrix_size ), matvec= A_matrix)
+
+        iters_per_cycle = 100#int(self.grid.Ntot/2)
+        number_cycles   = 100
+        gmres_kwargs={'tol':1e-3,'restart': iters_per_cycle ,'maxiter':number_cycles,'callback':caller,
+          'callback_type':'pr_norm'}#, 'M':M_preconditioner}
+        x0 = 
+        c_s_k_sol_flat  , self.info = gmres(A, b, x0 = x0, **gmres_kwargs)
+
 
     # Solver
     def HNC_solve(self, h_max=200, alpha_method='best', alpha_Picard = 0.1, alpha_oz = 0., iters_to_check=10 ):
