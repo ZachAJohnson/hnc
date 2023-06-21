@@ -585,28 +585,28 @@ class HNC_solver():
         self.ceff_r_matrix = np.zeros((self.Neff_species,self.Neff_species,self.N_bins))
         self.βueff_r_matrix = np.zeros((self.Neff_species,self.Neff_species,self.N_bins))
 
-    # def invert_HNC_OZ(self, removed_species):
-    #     """ 
-    #     Takes N species results and inverts it to find single effective v_ii for one species
-    #     """
-    #     self.Neff_species = self.N_species - len(removed_species)
-    #     # First get new effective h matrix
-    #     self.rhoeff        = np.delete(self.rho, removed_species)
-    #     self.βωeff_r_matrix   = self.remove_species(self.βω_r_matrix, removed_species)
-    #     self.heff_r_matrix = -1 + np.exp(-self.βωeff_r_matrix)  #self.remove_species(self.h_r_matrix, removed_species)
-    #     self.heff_k_matrix = self.FT_r_2_k_matrix(self.heff_r_matrix)
+    def invert_HNC_OZ(self, removed_species):
+        """ 
+        Takes N species results and inverts it to find single effective v_ii for one species
+        """
+        self.Neff_species = self.N_species - len(removed_species)
+        # First get new effective h matrix
+        self.rhoeff        = np.delete(self.rho, removed_species)
+        self.βωeff_r_matrix   = self.remove_species(self.βω_r_matrix, removed_species)
+        self.heff_r_matrix = -1 + np.exp(-self.βωeff_r_matrix)  #self.remove_species(self.h_r_matrix, removed_species)
+        self.heff_k_matrix = self.FT_r_2_k_matrix(self.heff_r_matrix)
 
-    #     #Initialize other matrices to new size
-    #     self.initialize_effective()
+        #Initialize other matrices to new size
+        self.initialize_effective()
 
-    #     # EXACT Ornstein-Zernike!
-    #     I_plus_h_rho_inverse = self.invert_matrix(self.I[:self.Neff_species,:self.Neff_species,np.newaxis] + self.heff_k_matrix*self.rhoeff[:,np.newaxis,np.newaxis])
-    #     # I_plus_h_rho_inverse = 1/(self.I[:self.Neff_species,:self.Neff_species, np.newaxis] + self.heff_k_matrix*self.rhoeff[:,np.newaxis,np.newaxis])
-    #     self.ceff_k_matrix  =  self.A_times_B(I_plus_h_rho_inverse, self.heff_k_matrix)
-    #     self.ceff_r_matrix = self.FT_k_2_r_matrix(self.ceff_k_matrix)
+        # EXACT Ornstein-Zernike!
+        I_plus_h_rho_inverse = self.invert_matrix(self.I[:self.Neff_species,:self.Neff_species,np.newaxis] + self.heff_k_matrix*self.rhoeff[:,np.newaxis,np.newaxis])
+        # I_plus_h_rho_inverse = 1/(self.I[:self.Neff_species,:self.Neff_species, np.newaxis] + self.heff_k_matrix*self.rhoeff[:,np.newaxis,np.newaxis])
+        self.ceff_k_matrix  =  self.A_times_B(I_plus_h_rho_inverse, self.heff_k_matrix)
+        self.ceff_r_matrix = self.FT_k_2_r_matrix(self.ceff_k_matrix)
 
-    #     # Approximate with HNC
-    #     self.βueff_r_matrix   = self.heff_r_matrix - self.ceff_r_matrix + self.βωeff_r_matrix
+        # Approximate with HNC
+        self.βueff_r_matrix   = self.heff_r_matrix - self.ceff_r_matrix + self.βωeff_r_matrix
 
 
     def SVT_matrix_eqn_at_single_k(self, h_k_matrix, c_s_k_matrix, βu_l_k_matrix):

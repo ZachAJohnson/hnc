@@ -154,6 +154,15 @@ class QSP_HNC():
         vei_pseudopotential = Γ*one_over_r_cutoff
         return vei_pseudopotential * ( 1 -  np.exp(-r/Λ) )
 
+    def βvei_atomic(self, r, core_height=1):
+        r_c  = self.r_c #3/5 r_s in linear n_b(r) model
+        Λ, Γ = self.Λei, self.Γei
+        inside_core=np.heaviside(r_c - r,0.5)
+        outside_core = np.heaviside(r - r_c, 0.5)
+        one_over_r_cutoff = inside_core*core_height  + outside_core*r_c/r  
+        vei_pseudopotential = one_over_r_cutoff
+        return vei_pseudopotential * ( 1 -  np.exp(-r/Λ) )
+
     def βvii(self, r):
         return self.Γii/r 
 
