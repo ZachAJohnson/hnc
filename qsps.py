@@ -151,17 +151,27 @@ class QSP_HNC():
         r_c  = self.r_c #3/5 r_s in linear n_b(r) model
         Λ, Γ = self.Λei, self.Γei
         one_over_r_cutoff = np.heaviside(r - r_c, 0.5)/r + core_height/r_c * np.heaviside(r_c - r,0.5)
-        vei_pseudopotential = Γ*one_over_r_cutoff
-        return vei_pseudopotential * ( 1 -  np.exp(-r/Λ) )
+        βvei_pseudopotential = Γ*one_over_r_cutoff
+        return βvei_pseudopotential * ( 1 -  np.exp(-r/Λ) )
 
-    def βvei_atomic(self, r, core_height=1):
-        r_c  = self.r_c #3/5 r_s in linear n_b(r) model
-        Λ, Γ = self.Λei, self.Γei
-        inside_core=np.heaviside(r_c - r,0.5)
-        outside_core = np.heaviside(r - r_c, 0.5)
-        one_over_r_cutoff = inside_core*core_height  + outside_core*r_c/r  
-        vei_pseudopotential = one_over_r_cutoff
-        return vei_pseudopotential * ( 1 -  np.exp(-r/Λ) )
+    # def βvei_atomic(self, r, core_height=1):
+    #     r_c  = self.r_c #3/5 r_s in linear n_b(r) model
+    #     Λ, Γ = self.Λei, self.Γei
+    #     inside_core = np.heaviside(r_c - r,0.5)
+    #     outside_core = np.heaviside(r - r_c, 0.5)
+    #     one_over_r_cutoff = inside_core*core_height  + outside_core*r_c/r  
+    #     βvei_pseudopotential = one_over_r_cutoff
+    #     return -2*βvei_pseudopotential * ( 1 -  np.exp(-r/Λ) )
+
+    # def βvei_atomic(self, r, core_height=1):
+    #     r_c  = self.r_c #3/5 r_s in linear n_b(r) model
+    #     Λ, Γ = self.Λei, self.Γei
+    #     Λ_atomic = np.sqrt(r_c**2 + Λ**2)
+        
+    #     unnormalized_βvei = 1/r * ( 1 -  np.exp(-r/Λ_atomic) )
+    #     unnormalized_βvei_at_0 = 1/Λ_atomic
+    #     correction_factor_from_h_c = 2
+    #     return correction_factor_from_h_c *(-unnormalized_βvei  * 1/unnormalized_βvei_at_0)
 
     def βvii(self, r):
         return self.Γii/r 

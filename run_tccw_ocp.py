@@ -9,18 +9,19 @@ from time import time
 
 # from hnc_custom_screeningOZ_multiscale import  HNC_solver
 # from hnc import  HNC_solver
-from hnc_newton import  HNC_solver
+from hnc_Ng import  HNC_solver
 from qsps import *
 
 prop_cycle = plt.rcParams['axes.prop_cycle']
 colors = prop_cycle.by_key()['color']
   
-def run_hnc_newton(n_in_per_cc, T, Z, A, Zstar, num_iterations=1e3, alpha = 1e-3, tol=1e-8, c_k_guess=None , which_Tij='thermal',
-            oz_type='standard', method='kryov', add_bridge=False, bridge='yukawa' , pseudopotential=False, r_c=0.6,
-                  rdiff=1e-8):
+def set_hnc(n_in_per_cc, T, Z, A, Zstar, c_k_guess=None , which_Tij='thermal',
+            oz_type='standard', method='kryov', add_bridge=False, bridge='yukawa',
+            pseudopotential=False, r_c=0.6, no_coupling=False, N_bins = 500, R_max=5):
+    
     n_in_AU = n_in_per_cc*1e6 *aB**3
     ri = QSP_HNC.rs_from_n(n_in_AU)
-    qsp = QSP_HNC(Z, A, Zstar, Te, Ti, ri, Zstar*n_in_AU, which_Tij=which_Tij, r_c=r_c)
+    qsp = QSP_HNC(Z, A, Zstar, T, T, ri, Zstar*n_in_AU, which_Tij=which_Tij, r_c=r_c)
 
     N_species = 2
     Gamma = np.array(  [[qsp.Γii,  qsp.Γei],
@@ -29,12 +30,13 @@ def run_hnc_newton(n_in_per_cc, T, Z, A, Zstar, num_iterations=1e3, alpha = 1e-3
 
     names = ["Ion-1", "Electron", ] 
     kappa = 1
+    
     rhos = np.array([  3/(4*np.pi), Zstar*3/(4*np.pi) ])
     temps = np.array([qsp.Ti, qsp.Te_c])
     masses= np.array([qsp.m_i, m_e])
-    hnc1 = HNC_solver(N_species, Gamma, rhos, temps, masses , tol=tol,
-                     kappa_multiscale=5, num_iterations=int(num_iterations), 
-                     R_max=R_max, N_bins=N_bins, names=names, dst_type=3, oz_method=oz_type)
+    hnc1 = HNC_solver(N_species, Gamma, rhos, temps, masses ,
+                     kappa_multiscale=5, R_max=R_max, N_bins=N_bins, 
+                      names=names, dst_type=3, oz_method=oz_type)
 
     if pseudopotential==True:
         βvei = qsp.βvei_atomic(hnc1.r_array)
@@ -42,14 +44,15 @@ def run_hnc_newton(n_in_per_cc, T, Z, A, Zstar, num_iterations=1e3, alpha = 1e-3
         βvei = qsp.βvei(hnc1.r_array)
     βu_r_matrix = np.array([[qsp.βvii(hnc1.r_array), βvei],
                             [βvei, qsp.βvee(hnc1.r_array)]])
-
+    if no_coupling:
+        βu_r_matrix[0,1]=0
+        βu_r_matrix[1,0]=0
+    
     if add_bridge:
         if bridge=='ocp':
             βu_r_matrix[0,0] = βu_r_matrix[0,0] - hnc1.Bridge_function_OCP(hnc1.r_array, qsp.Γii)
-            # print("Bridge OCP: ", hnc1.Bridge_function_OCP(hnc1.r_array, qsp.Γii))
         elif bridge=='yukawa':
             βu_r_matrix[0,0] = βu_r_matrix[0,0] - hnc1.Bridge_function_Yukawa(hnc1.r_array, qsp.Γii, qsp.get_κ())
-            # print("Bridge Yukawa: ", hnc1.Bridge_function_Yukawa(hnc1.r_array, qsp.Γii, qsp.get_κ()))
     hnc1.set_βu_matrix(βu_r_matrix)
     hnc1.initialize_c_k()
 #     print("c asymm: ", hnc1.c_s_k_matrix[1,0]/hnc1.c_s_k_matrix[0,1])
@@ -65,10 +68,8 @@ def run_hnc_newton(n_in_per_cc, T, Z, A, Zstar, num_iterations=1e3, alpha = 1e-3
 
 #     print("c asymm: ", hnc1.c_s_k_matrix[1,0]/hnc1.c_s_k_matrix[0,1])
     hnc1.set_C_matrix()
-    picard_convergence = hnc1.HNC_solve(alpha_method='fixed', alpha_Picard = alpha, alpha_oz = 0e-4)
-    hnc1.HNC_newton_solve(method=method, rdiff=rdiff)
 
-    return hnc1, qsp, [picard_convergence, hnc1.newton_succeed]
+    return hnc1, qsp
 
 from scipy.optimize import curve_fit
 
@@ -103,11 +104,19 @@ tccw_cases = [tccw_mixture_data.iloc[n] for n in range(len(tccw_mixture_data))]
 
 case_successes = {}
 SVT_case_successes = {}
-R_max = 10
-N_bins = 1000
 max_attempts=1
 t0 = time()
-for tccw_case in tccw_cases[3:]:
+cases_converged_thusfar = {'H1':True,'C1':True, 'Al1':True, 'Cu1': True, 'Be1': True, 'Au1': False, 'H2': True, 'H3': True, 'C2': False, 'C3': True, 'Al2': False, 'Al3': True,
+ 'Cu2': False, 'Cu3': True, 'H11': False, 'H21': False, 'H31': False, 'C11': False, 'C21': False, 'C31': False, 'Al11': False, 'Al21': False, 
+ 'Al31': False, 'Cu11': False, 'Cu21': False, 'Cu31': False, 'H12': True, 'H22': True, 'H32': False, 'C12': True, 'C22': False, 'C32': False, 
+ 'Al12': True, 'Al22': False, 'Al32': False, 'Cu12': True, 'Cu22': False, 'Cu32': False, 'H13': True, 'H23': True, 'H33': True, 'C13': True,
+  'C23': True, 'C33': False, 'Al13': False, 'Al23': False, 'Al33': False, 'Cu13': True, 'Cu23': False, 'Cu33': False, 'H14': False, 'H24': False, 
+  'H34': False, 'C14': False, 'C24': False, 'C34': False, 'Al14': False, 'Al24': False, 'Al34': False, 'Cu14': False, 'Cu24': False, 'Cu34': False,
+   'H15': False, 'H25': False, 'H35': False, 'C15': False, 'C25': False, 'C35': False, 'Al15': False, 'Al25': False, 'Al35': False, 'Cu15': False,
+    'Cu25': False, 'Cu35': False, 'H16': False}
+
+for tccw_case in tccw_cases[44:45]:
+    t0=time()
     α = 0.1
     case_converged=False
     case_attempts=0
@@ -125,44 +134,49 @@ for tccw_case in tccw_cases[3:]:
     print(r_s, r_c)
     print('\n______________________________\nCase num: {0} Case ID: {1}'.format(case_num, case_id))
     print("Te = {0:.3e} eV, n_i = {1:.3e} 1/cc, r_c/r_s = {2:.3f}".format(Te/eV, ni, r_c))
+    if cases_converged_thusfar[case_id]==True:
+        print("Already converged, skipping.")
+        continue
+    # while case_converged==False:
+    try:
+        print('')
+        N_bins, R_max = 100, 3
+        SVT, qsp = set_hnc(ni, Te, Z, A, Zstar, 
+                        pseudopotential=True, oz_type='svt',r_c=r_c, 
+                        add_bridge=True, bridge='ocp',N_bins=N_bins, R_max=R_max)
 
-    while case_converged==False:
-        try:
-            print('')
-            SVT, qsp , converged  = run_hnc_newton(ni, Te, Z, A, Zstar ,method='krylov',alpha=α, tol=1e-4, 
-                num_iterations=1e3, oz_type='svt', pseudopotential=True, 
-                r_c = r_c, add_bridge=True, bridge='ocp', rdiff=1e-6)
-            case_attempts += 1
-            if converged[0] != 0 and case_attempts<max_attempts:
-                print("Code is: ", converged)
-                α*=0.5
-                print("Decreaing α to ", α)
+        Picard_converged = SVT.HNC_solve(alpha_method='fixed', alpha_Picard = 0.1, tol=1e-3, alpha_Ng=1e-10, 
+                       iters_to_wait=1e4, num_iterations=1e3)
+        
+        options={'eps':1e-6,'maxfev':50000,'factor':100,'xtol':1e-5} 
+        newton_kwargs= {'method':'hybr', 'options':options} 
+        sol = SVT.HNC_newton_solve( **newton_kwargs)
+        newton_final_err = SVT.total_err(SVT.FT_k_2_r_matrix(sol.x.reshape(2,2,N_bins)))
+        print("Root Final Err: ", newton_final_err)
+        
+        newton_converged = (newton_final_err<1e-1) #SVT.newton_succeed
+        case_converged = newton_converged
 
-            elif converged[0] == 0 or converged[1]==True:
-                print("Converged")
-                case_converged=True
-            
-            elif case_attempts>=max_attempts:
-                print("Hit max attempts, skipping case.")
-                break
-        except Exception as err:
-            print("Running Case ID: {0} broken: {1}. Skipping.".format(case_id, err) )
-            case_converged=False
-            break
+        SVT.invert_HNC_OZ([1])
 
-    case_successes[case_id] = converged
-    SVT_case_successes[case_id] = converged
-    SVT.invert_HNC([1])
-    fig, ax = plt.subplots(figsize=(8,6),facecolor='w')
-    fig.suptitle(r"SVT {0} $T=${1:.1f} eV, $r_i$={2:.2f}".format(case_id, Te/eV, qsp.ri), fontsize=20)
-
-    yukawa_matrix = (SVT.Gamma[:,:,np.newaxis]/SVT.r_array * np.exp(-SVT.r_array*qsp.get_κ())[np.newaxis,np.newaxis,:] ) [:-1,:-1]
-    coulomb_matrix = (SVT.Gamma[:,:,np.newaxis]/SVT.r_array) [:-1,:-1]
-
+    except Exception as err:
+        print("Running Case ID: {0} broken: {1}. Skipping.".format(case_id, err) )
+        case_converged=False
+        # break
+    print("Case time: {0:.3e} s\n".format(time()-t0))
+    case_successes[case_id] = case_converged
+    SVT_case_successes[case_id] = case_converged
+    
 # a/r*np.exp(-b*r)/(1+np.exp(c*(r-d))) + e*np.exp(-(f-r)**2/g)
 
     if case_converged==True:
         try:
+            fig, ax = plt.subplots(figsize=(8,6),facecolor='w')
+            fig.suptitle(r"SVT {0} $T=${1:.1f} eV, $r_i$={2:.2f}, solve_err={3:.3e}".format(case_id, Te/eV, qsp.ri, newton_final_err), fontsize=20)
+
+            yukawa_matrix = (SVT.Gamma[:,:,np.newaxis]/SVT.r_array * np.exp(-SVT.r_array*qsp.get_κ())[np.newaxis,np.newaxis,:] ) [:-1,:-1]
+            coulomb_matrix = (SVT.Gamma[:,:,np.newaxis]/SVT.r_array) [:-1,:-1]
+
             # fit = βu_fit(yukawa_plus_gaussian, SVT.r_array, SVT.βueff_r_matrix[0,0], initial_guess=[   qsp.Γii, qsp.get_κ(),2 , 1,    -1, 1.9, 1,    1, 0.01, 1 , 10, 2])
             ax.plot(SVT.r_array, SVT.βu_r_matrix[0,0], 'k--',label='Initial')
             ax.plot(SVT.r_array, yukawa_matrix[0,0],'k-.', label="Yukawa")
@@ -173,19 +187,19 @@ for tccw_case in tccw_cases[3:]:
                 fit1 = βu_fit(yukawa_plus, SVT.r_array, SVT.βueff_r_matrix[0,0], initial_guess=[   qsp.Γii, qsp.get_κ(),2 , 1])
                 ax.plot(SVT.r_array, fit1.y_fit, color=colors[1],linestyle='-', label="Yukawa Sigmoid Fit")
                 ax.plot(SVT.r_array, fit1.y_fit-fit1.y, color=colors[1],linestyle='--', label="Δ Fit")
-                np.savetxt("./fits/{0}_βueff.txt".format(case_id), fit1.y_vals[0], header="βu_eff = a/r*np.exp(-b*r)/(1+np.exp(c*(r-d))), err={0:.3e}".format(fit1.err))
+                np.savetxt("./fits/{0}_βueff.txt".format(case_id), fit1.y_vals[0], header="βu_eff = a/r*np.exp(-b*r)/(1+np.exp(c*(r-d))), fit_err={0:.3e}, solve_err={1:.3e}".format(fit1.err, newton_final_err))
                 try: 
                     fit2 = βu_fit(yukawa_plus_cos, SVT.r_array, SVT.βueff_r_matrix[0,0], initial_guess=[  *fit1.y_vals[0], 1, 0.01, 1 , 10, 2])
                     ax.plot(SVT.r_array, fit2.y_fit, color=colors[2],linestyle='-', label="Yukawa Sigmoid Cosine Fit")
                     ax.plot(SVT.r_array, fit2.y_fit-fit2.y, color=colors[2],linestyle='--')
-                    np.savetxt("./fits/{0}_βueff.txt".format(case_id), fit2.y_vals[0], header="βu_eff = a/r*np.exp(-b*r)/(1+np.exp(c*(r-d))) + h*np.cos((r-i)*j*np.exp(-k*r))*np.exp(-l*r), err={0:.3e}".format(fit2.err))
+                    np.savetxt("./fits/{0}_βueff.txt".format(case_id), fit2.y_vals[0], header="βu_eff = a/r*np.exp(-b*r)/(1+np.exp(c*(r-d))) + h*np.cos((r-i)*j*np.exp(-k*r))*np.exp(-l*r), fit_err={0:.3e}, solve_err={1:.3e}".format(fit2.err, newton_final_err))
                 except:
                     pass
                 try:
                     fit3 = βu_fit(yukawa_plus_gaussian_cos, SVT.r_array, SVT.βueff_r_matrix[0,0], initial_guess=[  *fit2.y_vals[0], -1, 1.9, 1])
                     ax.plot(SVT.r_array, fit3.y_fit, color=colors[3],linestyle='-', label="Yukawa Sigmoid Cosine Gaussian Fit")    
                     ax.plot(SVT.r_array, fit3.y_fit-fit3.y, color=colors[3],linestyle='--')    
-                    np.savetxt("./fits/{0}_βueff.txt".format(case_id), fit3.y_vals[0], header="βu_eff = a/r*np.exp(-b*r)/(1+np.exp(c*(r-d))) + e*np.cos((r-f)*g*np.exp(-h*r))*np.exp(-i*r) + j*np.exp(-(k-r)**2/l), err={0:.3e}".format(fit3.err))
+                    np.savetxt("./fits/{0}_βueff.txt".format(case_id), fit3.y_vals[0], header="βu_eff = a/r*np.exp(-b*r)/(1+np.exp(c*(r-d))) + e*np.cos((r-f)*g*np.exp(-h*r))*np.exp(-i*r) + j*np.exp(-(k-r)**2/l), fit_err={0:.3e}, solve_err={1:.3e}".format(fit3.err, newton_final_err))
                 except:
                     pass
                 # ax.set_title("a/r*np.exp(-b*r)/(1+np.exp(c*(r-d))) + e*np.exp(-(f-r)**2/g) \n {0}".format(fit.y_vals[0]))
@@ -203,7 +217,7 @@ for tccw_case in tccw_cases[3:]:
             ax.set_ylabel(r'$\beta u(r/r_s)$',fontsize=20)
             ax.set_xlabel(r'$r/r_s$',fontsize=20)
            
-            ax.set_xlim(0, R_max)
+            ax.set_xlim(0, SVT.R_max)
             ax.set_yscale('symlog',linthresh=0.1)
             ax.tick_params(labelsize=15)
             ax.legend(fontsize=10)
@@ -219,7 +233,7 @@ for tccw_case in tccw_cases[3:]:
                     axs[i,j].set_ylabel(r'$g(r)$',fontsize=20)
                     axs[i,j].set_xlabel(r'$r/r_s$',fontsize=20)
                     axs[i,j].tick_params(labelsize=20)
-                    axs[i,j].set_xlim(0,R_max)
+                    axs[i,j].set_xlim(0,SVT.R_max)
                     # axs[i,j].legend(fontsize=15)
                     axs[i,j].set_title(SVT.name_matrix[i][j] + r", $\Gamma_{{ {0},{1} }}$ = {2:.2f}".format(i,j, SVT.Gamma[i][j]) ,fontsize=15)
 
