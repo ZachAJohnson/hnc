@@ -55,7 +55,7 @@ class HNC_solver():
         Returns:
             B_OCP(r)
         """
-        if Gamma>5:
+        if Gamma>5.5:
             b0 = 0.258 - 0.0612 *np.log(Gamma) + 0.0123*np.log(Gamma)**2 - 1/Gamma
             b1 = 0.0269 + 0.0318* np.log(Gamma) + 0.00814*np.log(Gamma)**2
 
