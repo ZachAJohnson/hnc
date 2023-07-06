@@ -158,7 +158,7 @@ case_successes = {}
 atom_case_successes = {}
 max_attempts=1
 t0 = time()
-cases_converged_thusfar = {'H1':True,'C1':True, 'Al1':True, 'Cu1': True, 'Be1': True, 'Au1': True, 'H2': True, 'H3': True, 'C2': False, 'C3': True, 'Al2': False, 'Al3': True,
+cases_converged_thusfar = {'H1':True,'C1':True, 'Al1':True, 'Cu1': True, 'Be1': True, 'Au1': False, 'H2': True, 'H3': True, 'C2': False, 'C3': True, 'Al2': False, 'Al3': True,
  'Cu2': False, 'Cu3': True, 'H11': False, 'H21': False, 'H31': False, 'C11': False, 'C21': False, 'C31': False, 'Al11': False, 'Al21': False, 
  'Al31': False, 'Cu11': False, 'Cu21': False, 'Cu31': False, 'H12': True, 'H22': True, 'H32': False, 'C12': True, 'C22': False, 'C32': False, 
  'Al12': True, 'Al22': False, 'Al32': False, 'Cu12': True, 'Cu22': False, 'Cu32': False, 'H13': True, 'H23': True, 'H33': True, 'C13': True,
@@ -167,7 +167,7 @@ cases_converged_thusfar = {'H1':True,'C1':True, 'Al1':True, 'Cu1': True, 'Be1': 
    'H15': False, 'H25': False, 'H35': False, 'C15': False, 'C25': False, 'C35': False, 'Al15': False, 'Al25': False, 'Al35': False, 'Cu15': False,
     'Cu25': False, 'Cu35': False, 'H16': False}
 
-for tccw_case in tccw_cases:
+for tccw_case in tccw_cases[5:6]:
     t0=time()
     α = 0.1
     case_converged=False
@@ -175,7 +175,7 @@ for tccw_case in tccw_cases:
     case_num= tccw_case[' ']
     case_id = tccw_case['Case ID']
     ni = tccw_case['Number Density [N/cc]']
-    Te = tccw_case['Temperature [eV]']*eV
+    Te = tccw_case['Temperature [eV]']*eV_to_AU
     Ti = Te
     Z = tccw_case['Atomic Number']
     # Zbar = tccw_case['Zbar (TF)']
@@ -185,14 +185,14 @@ for tccw_case in tccw_cases:
     r_c = tccw_case['Average-Bound Radius [cm]']/r_s
     print(r_s, r_c)
     print('\n______________________________\nCase num: {0} Case ID: {1}'.format(case_num, case_id))
-    print("Te = {0:.3e} eV, n_i = {1:.3e} 1/cc, r_c/r_s = {2:.3f}".format(Te/eV, ni, r_c))
-    if cases_converged_thusfar[case_id]==True:
-        print("Already converged, skipping.")
-        continue
+    print("Te = {0:.3e} eV, n_i = {1:.3e} 1/cc, r_c/r_s = {2:.3f}".format(Te/eV_to_AU, ni, r_c))
+    # if cases_converged_thusfar[case_id]==True:
+    #     print("Already converged, skipping.")
+    #     continue
     # while case_converged==False:
     try:
         print('')
-        N_bins, R_max = 500, 5
+        N_bins, R_max = 300, 3
         atom_onlyion, _ = set_hnc_onlyion(ni, Te, Z, A, Zbar, 
                                     pseudopotential=True, oz_type='svt',r_c=r_c, 
                                     add_bridge=True, bridge='ocp', N_bins=N_bins, R_max=R_max)
@@ -211,7 +211,7 @@ for tccw_case in tccw_cases:
 
         atom.c_s_k_matrix[0,0] = 0.5*atom_onlyion.c_s_k_matrix[0,0]
 
-        Picard_converged = atom.HNC_solve(alpha_method='fixed', alpha_Picard = 0.1, tol=1e-3, alpha_Ng=1e-10, 
+        Picard_converged = atom.HNC_solve(alpha_method='fixed', alpha_Picard = 0.01, tol=1e-3, alpha_Ng=1e-10, 
                        iters_to_wait=1e4, num_iterations=1e3)
         
         options={'eps':1e-6,'maxfev':50000,'factor':100,'xtol':1e-5} 
@@ -236,11 +236,11 @@ for tccw_case in tccw_cases:
 # a/r*np.exp(-b*r)/(1+np.exp(c*(r-d))) + e*np.exp(-(f-r)**2/g)
 
     if case_converged==True:
-        g_r_header = "atom {0} T={1:.1f} eV, r_i={2:.2f}, Zbar (TFDW) ={3:.3f} , solve_err={4:.3e}\n r/r_i \t\t\t\t gii(r/r_i) \t\t\t\t gie(r/r_i) \t\t\t\t gee(r/r_i)".format(case_id, Te/eV, Zbar, qsp.ri,newton_final_err)
+        g_r_header = "atom {0} T={1:.1f} eV, r_i={2:.2f}, Zbar (TFDW) ={3:.3f} , solve_err={4:.3e}\n r/r_i \t\t\t\t gii(r/r_i) \t\t\t\t gie(r/r_i) \t\t\t\t gee(r/r_i)".format(case_id, Te/eV_to_AU, Zbar, qsp.ri,newton_final_err)
         np.savetxt("./fits/{0}_g_r.txt".format(case_id), np.array([atom.r_array, atom.h_r_matrix[0,0]+1, atom.h_r_matrix[0,1]+1, atom.h_r_matrix[1,1]+1]).T, header=g_r_header)
         try:
             fig, ax = plt.subplots(figsize=(8,6),facecolor='w')
-            fig.suptitle(r"atom {0} $T=${1:.1f} eV, $r_i$={2:.2f}, solve_err={3:.3e}".format(case_id, Te/eV, qsp.ri, newton_final_err), fontsize=20)
+            fig.suptitle(r"atom {0} $T=${1:.1f} eV, $r_i$={2:.2f}, solve_err={3:.3e}".format(case_id, Te/eV_to_AU, qsp.ri, newton_final_err), fontsize=20)
 
             yukawa_matrix = (atom.Gamma[:,:,np.newaxis]/atom.r_array * np.exp(-atom.r_array*qsp.get_κ())[np.newaxis,np.newaxis,:] ) [:-1,:-1]
             coulomb_matrix = (atom.Gamma[:,:,np.newaxis]/atom.r_array) [:-1,:-1]

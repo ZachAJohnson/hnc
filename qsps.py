@@ -9,19 +9,12 @@ from pandas import read_csv
 from scipy.special import erfc
 
 # Build Components for QSP's
-
-m_e = 1
-m_p = 1833.274
-eV = 0.0367512 # So 4 eV = 4 * 0.036.. in natural units
-Kelvin = 8.61732814974493e-5*eV #Similarly, 1 Kelvin = 3.167e-6... in natural units 
-aB = 5.29177210903e-11 # Bohr radius in m
-
-π = np.pi
+from constants import *
 
 class QSP_HNC():
 
 
-    def __init__(self, Z, A, Zstar, Te, Ti, ri, ne, which_Tij='thermal', r_c = 3/5):
+    def __init__(self, Z, A, Zstar, Te, Ti, ri, ne, which_Tij='thermal', r_c = 3/5, verbose= False):
         self.Z = Z
         self.A = A
         self.Zstar = Zstar
@@ -32,9 +25,9 @@ class QSP_HNC():
         self.r_c = r_c
         self.which_Tij = which_Tij 
 
-        self.initialize_physics(Z, A, Zstar, Te, Ti, ri, ne)
+        self.initialize_physics(Z, A, Zstar, Te, Ti, ri, ne, verbose=verbose)
 
-    def initialize_physics(self, Z, A, Zstar, Te, Ti, ri, ne):
+    def initialize_physics(self, Z, A, Zstar, Te, Ti, ri, ne, verbose=False):
         # [AU]
 
         self.ri = ri
@@ -80,23 +73,23 @@ class QSP_HNC():
 
         self.Λee  = 1/np.sqrt(π*m_e*self.Te_c )/self.ri
         self.Λei  = 1/np.sqrt(2*π*m_e*self.Tie_c )/self.ri 
-        print("Λei = {0:.3f}".format(self.Λei))
-        # self.Λei  = np.sqrt(  self.Λei**2 + 0.6**2 )
-
-        print("Λee = {0:.3f}".format(self.Λee))
-        print("Λei adjusted with R = {0:.3f}".format(self.Λei))
+        
         self.Γee =  self.βe_c/self.ri 
         self.Γei = -self.Zstar*self.βie_c/self.ri
         self.Γii =  self.Zstar**2*self.βi/self.ri 
 
         self.Γ_matrix = np.array(  [[self.Γii,  self.Γei],
                                     [self.Γei,  self.Γee]])
- 
-        print("Γii={0:.3f}, Γie={1:.3f}, Γee={2:.3f} ".format(self.Γii, self.Γei, self.Γee))
-        print("r_i={0:.3f}".format(self.ri))
-        print("r_e={0:.3f}".format(self.re))
-        print("r_c={0:.3f}".format(self.r_c))
-        print("θ  ={0:.2e}".format(self.θ))
+        
+        if verbose:
+            print("Λei = {0:.3f}".format(self.Λei))
+            print("Λee = {0:.3f}".format(self.Λee))
+            
+            print("Γii={0:.3f}, Γie={1:.3f}, Γee={2:.3f} ".format(self.Γii, self.Γei, self.Γee))
+            print("r_i={0:.3f}".format(self.ri))
+            print("r_e={0:.3f}".format(self.re))
+            print("r_c={0:.3f}".format(self.r_c))
+            print("θ  ={0:.2e}".format(self.θ))
 
     @staticmethod
     def make_Te(Te, Tq):

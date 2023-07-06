@@ -36,9 +36,13 @@ class HNC_solver():
         self.make_k_r_spaces()
         self.initialize()
 
-        if names!=None:
+
+        if names is None:
+            self.names = ['']*self.N_species
+        else:
             self.names=names
-            self.make_name_matrix()
+        self.make_name_matrix()
+
 
     @staticmethod
     def Bridge_function_OCP(x, Gamma ):
@@ -490,13 +494,14 @@ class HNC_solver():
         # sol2 = root(f_to_min, self.c_s_k_matrix, method='krylov' , callback=callback_func, tol=tol, options=options)  
         # options={'eps':1e-6,'maxfev':100,'factor':0.1,'xtol':1e-3} 
         sol2 = root(f_to_min, self.c_s_k_matrix, **newton_kwargs)#method='hybr' , tol=tol, options=options)  
-        print("\nRoot Finder: ", sol2.success, sol2.message)
+
         self.c_s_k_matrix = sol2.x.reshape(self.N_species, self.N_species, self.N_bins)
         self.c_k_matrix = self.c_s_k_matrix - self.βu_l_k_matrix
         self.γs_k_matrix = self.get_γs_k_matrix(self.c_s_k_matrix)
         self.γs_r_matrix = self.FT_k_2_r_matrix(self.γs_k_matrix)
         self.h_r_matrix = -1 + np.exp(self.γs_r_matrix - self.βu_s_r_matrix)
         self.βω_r_matrix = self.βu_s_r_matrix - self.γs_r_matrix   # potential of mean force
+        print("\nRoot Finder: ", sol2.success, sol2.message, "final err: {0:.3e}".format(self.total_err(self.c_s_k_matrix)))
         if sol2.success:
             self.newton_succeed=True
         return sol2
@@ -562,7 +567,7 @@ class HNC_solver():
             actual_tot_err = self.total_err(self.c_s_k_matrix)
             self.tot_err_list.append(actual_tot_err)
             self.hnc_err_list.append(hnc_err)
-            if iteration%1==0 and verbose==True:
+            if iteration%100==0 and verbose==True:
                 print("{0}: Change in c_r: {1:.3e}, HNC Error: {2:.3e}, Total Error: {3:.3e}".format(iteration, err_c, hnc_err, actual_tot_err))
             
             if len(self.tot_err_list) > iters_to_check:
@@ -604,14 +609,16 @@ class HNC_solver():
         best_run_index = np.argmin(self.tot_err_list)
         self.c_s_k_matrix = self.c_s_k_matrix_list[best_run_index]# + self.βu_l_k_matrix
         self.set_all_matrices_from_csk(self.c_s_k_matrix)
-        print("Exiting, reverting to best index so far: ", best_run_index)
-        print("Final iter:{0}, Total Error: {1:.3e}".format(iteration, self.tot_err_list[best_run_index]))
-        # best_run_index = np.argmin(self.tot_err_list)
-        # self.c_s_k_matrix = self.c_s_k_matrix_list[best_run_index]
+        self.final_Picard_err = self.tot_err_list[best_run_index]
         
-        # self.h_r_matrix_list = self.h_r_matrix_list[:best_run_index+1]
-        # self.c_s_k_matrix_list = self.c_s_k_matrix_list[:best_run_index+1]
-        # self.u_ex_list = self.u_ex_list[:best_run_index+1]
+        self.h_r_matrix_list = self.h_r_matrix_list[:best_run_index+1]
+        self.c_s_k_matrix_list = self.c_s_k_matrix_list[:best_run_index+1]
+        self.u_ex_list = self.u_ex_list[:best_run_index+1]
+        self.tot_err_list = self.tot_err_list[:best_run_index+1]
+
+        print("Exiting status {0}, reverting to best index so far: {1}".format(converged, best_run_index))
+        print("Final iter:{0}, Total Error: {1:.3e}".format(iteration, self.final_Picard_err))
+
         return converged
 
     # HNC Inverter
