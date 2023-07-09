@@ -25,6 +25,7 @@ class CMEP_Atom():
 		self.hnc_solve_options.update(hnc_solve_options)
 		self.root_options.update(root_options)
 
+
 		if Zbar==None:
 			self.Zbar = self.ThomasFermiZbar()
 
@@ -36,7 +37,7 @@ class CMEP_Atom():
 		self.r_c = self.qsp_options['r_c']
 
 		self.names = ["ion", "electron"] 
-		
+		self.Picard_max_err = Picard_max_err
 		self.qsp = self.make_qsp(self.ni_cc, self.Zbar, self.Ti, self.Te)
 		self.hnc = self.make_hnc(self.qsp, self.Zbar)
 		# self.run_hnc(self.hnc, self.qsp)
@@ -96,8 +97,8 @@ class CMEP_Atom():
 		
 		if converged!=0 and hnc.final_Picard_err < self.Picard_max_err:
 			hnc.HNC_newton_solve( **self.root_options)
-		elif hnc.final_Picard_err < self.Picard_max_err:
-			print("QUIT: Picard Err too low. Newton assumed not to converge.")
+		elif hnc.final_Picard_err > self.Picard_max_err:
+			print("QUIT: Picard Err too high. Newton assumed not to converge. Try better initial condition or smaller α.")
 
 		hnc.Heff = self.get_effective_ion_H(hnc, qsp)
 		hnc.Ueff, hnc.Peff = self.get_effective_ion_U_P(hnc, qsp)
@@ -125,12 +126,36 @@ class CMEP_Atom():
 		U, P = self.get_effective_ion_U_P(hnc, qsp)
 		return U + P*Vol_AU
 
-	def make_mini_table(self, ε_table=0.01, N_table=2):
+	def get_full_U_P(self, hnc, qsp):
+	    r, dr = qsp.ri*hnc.r_array, qsp.ri*hnc.del_r
+	    Vol_AU = 4/3 * π * (hnc.R_max*qsp.ri)**3
+
+	    g_r, βveff_r, T, n_AU = hnc.heff_r_matrix[0,0] + 1, hnc.βueff_r_matrix[0,0], qsp.Ti, qsp.ni
+	    veff_r = βveff_r*T
+	    F = -np.gradient(veff_r, r)
+	    veff_r = βveff_r*T
+
+	    N = Vol_AU*n_AU 
+	    
+	    U_ideal = 3/2 * N * T
+	    P_ideal = n_AU * T
+	    
+	    U_ex    = 2*π*n_AU*N * np.sum( veff_r * g_r * r**2 * dr, axis=0 )
+	    P_ex    = 2*π/3 * n_AU**2 * np.sum( F * g_r * r**3 * dr, axis=0)
+	    return U_ideal + U_ex, P_ideal + P_ex
+
+	def get_full_H(self, hnc, qsp):
+		Vol_AU = 4/3 * π * (hnc.R_max* qsp.ri)**3
+		U, P = self.get_effective_ion_U_P(hnc, qsp)
+		return U + P*Vol_AU
+
+	def make_nT_table(self, ε_table=0.01, N_table=2):
 		self.mini_atom_table = np.zeros((N_table,N_table)).tolist()
-		self.H_table = np.zeros((N_table,N_table))
 		self.T_table = np.zeros((N_table,N_table))
-		self.U_table = np.zeros((N_table,N_table))
-		self.P_table = np.zeros((N_table,N_table))
+		self.u_table = np.zeros((N_table,N_table))
+		self.Ueff_table = np.zeros((N_table,N_table))
+		self.Peff_table = np.zeros((N_table,N_table))
+		self.Heff_table = np.zeros((N_table,N_table))
 
 		ni_list = self.ni_cc*np.linspace(1-ε_table, 1+ε_table, num = N_table)
 		Ti_list = self.Te*np.linspace(1-ε_table, 1+ε_table, num = N_table)
@@ -147,52 +172,110 @@ class CMEP_Atom():
 				self.run_hnc(tmp_hnc, tmp_qsp, c_s_k_guess = c_s_k_guess)
 
 				self.mini_atom_table[i][j] = tmp_hnc
-				self.H_table[i,j]  = tmp_hnc.Heff
-				self.U_table[i][j] = tmp_hnc.Ueff
-				self.P_table[i][j] = tmp_hnc.Peff
-				self.T_table[i][j] = Ti
+				
+				self.u_table[i,j] = tmp_hnc.total_energy_density()/self.qsp.ri**3 
+				self.Heff_table[i,j]  = tmp_hnc.Heff
+				self.Ueff_table[i,j] = tmp_hnc.Ueff
+				self.Peff_table[i,j] = tmp_hnc.Peff
+				self.T_table[i,j] = Ti
 
-	def get_cp(self, ε_derivative=1e-6, **table_kwargs):
-		self.make_mini_table(**table_kwargs)
+	def get_effective_ion_cp(self, ε_derivative=1e-6, **table_kwargs):
+		self.make_nT_table(**table_kwargs)
 		
-		T_P_data = list(zip( np.array(self.T_table).flatten(),np.array(self.P_table).flatten() ))
-		H_TP = LinearNDInterpolator(T_P_data, np.array(self.H_table).flatten())
+		T_P_data = list(zip( np.array(self.T_table).flatten(),np.array(self.Peff_table).flatten() ))
+		H_TP = LinearNDInterpolator(T_P_data, np.array(self.Heff_table).flatten())
 
-		T, P = np.average(self.T_table), np.average(self.P_table) 		
+		T, P = np.average(self.T_table), np.average(self.Peff_table) 		
 
-		self.C_p_AU = (H_TP(T*(1+ε_derivative), P) - H_TP(T*(1-ε_derivative), P))/(2*T*ε_derivative)
-		self.C_v_AU = (self.U_table[0,1]-self.U_table[0,0])/(self.T_table[0,1]-self.T_table[0,0])
+		self.Ceff_p_AU = (H_TP(T*(1+ε_derivative), P) - H_TP(T*(1-ε_derivative), P))/(2*T*ε_derivative)
+		self.Ceff_v_AU = (self.Ueff_table[0,1]-self.Ueff_table[0,0])/(self.T_table[0,1]-self.T_table[0,0])
 
 		r_s_cc = self.qsp.ri /cm_to_AU
 		Vol_cc = 4/3 * π * (self.hnc.R_max*r_s_cc)**3
 		N = Vol_cc * self.ni_cc
 
-		C_p_SI = self.C_p_AU * k_B
-		C_v_SI = self.C_v_AU * k_B
+		Ceff_p_SI = self.Ceff_p_AU * k_B
+		Ceff_v_SI = self.Ceff_v_AU * k_B
 		
 		m_p_SI = 1.672621898e-27 # kg
 		M = N  * self.A * m_p_SI 
 
-		self.c_p_SI_mass = C_p_SI/M # J/kg/K
-		self.c_p_SI_vol  = C_p_SI/(Vol_cc*1e-6) #J/m^3/K
-		self.c_v_SI_vol  = C_v_SI/(Vol_cc*1e-6) #J/m^3/K
+		self.ceff_p_SI_mass = Ceff_p_SI/M # J/kg/K
+		self.ceff_p_SI_vol  = Ceff_p_SI/(Vol_cc*1e-6) #J/m^3/K
+		self.ceff_v_SI_vol  = Ceff_v_SI/(Vol_cc*1e-6) #J/m^3/K
 		
 		n_AU = self.ni_cc * (1e2*aB)**3
-		self.E_over_nkBT = self.hnc.Ueff/( self.qsp.Ti*N )
-		self.P_over_nkBT = self.hnc.Peff/( self.qsp.Ti*n_AU)
-		self.c_p_over_nkB = self.C_p_AU/N #c_p_SI_vol/k_B/(ni_cc*1e6)
+		self.Eeff_over_nkBT = self.hnc.Ueff/( self.qsp.Ti*N )
+		self.Peff_over_nkBT = self.hnc.Peff/( self.qsp.Ti*n_AU)
+		self.ceff_p_over_nkB = self.Ceff_p_AU/N #c_p_SI_vol/k_B/(ni_cc*1e6)
+		self.ceff_v_over_nkB = self.Ceff_v_AU/N #c_p_SI_vol/k_B/(ni_cc*1e6)
 			
 
-		print("\n_____________________________\nHeat Capacity Results ")
-		print("c_p = {0:.3e} [J/m^3/K] = {1:.3e} [erg/cc/K]".format(self.c_p_SI_vol, self.c_p_SI_vol*J_to_erg*1e-6 ))
+		print("\n_____________________________\nHeat Capacity Results (Effective Ion Picture) ")
+		print("c_p = {0:.3e} [J/m^3/K] = {1:.3e} [erg/cc/K]".format(self.ceff_p_SI_vol, self.ceff_p_SI_vol*J_to_erg*1e-6 ))
 		print("c_p^ideal = {0:.3e} [J/m^3/K] = {1:.3e} [erg/cc/K]".format(5/2 * self.ni_cc* k_B * 1e6, 5/2 * self.ni_cc * k_B * 1e6*J_to_erg*1e-6 ))
-		print("")
-		print("c_v = {0:.3e} [J/m^3/K] = {1:.3e} [erg/cc/K]".format(self.c_v_SI_vol, self.c_v_SI_vol*J_to_erg*1e-6 ))
-		print("γ = cp/cv = {0:.3e}".format(self.C_p_AU/self.C_v_AU ))
-		print("E/nkBT = {0:.3e}, P/nkBT = {1:.3e}, cp/nkB = {2:.3e}".format(self.E_over_nkBT, self.P_over_nkBT, self.c_p_over_nkB))
+		print("c_v = {0:.3e} [J/m^3/K] = {1:.3e} [erg/cc/K]".format(self.ceff_v_SI_vol, self.ceff_v_SI_vol*J_to_erg*1e-6 ))
+
+		print("\nγ = cp/cv = {0:.3e}".format(self.Ceff_p_AU/self.Ceff_v_AU ))
+
+		print("\nE/nkBT = {0:.3f}, P/nkBT = {1:.3f} ".format(self.Eeff_over_nkBT, self.Peff_over_nkBT))
+		print("cp/nkB = {0:.3f}, cv/nkB = {1:.3f} ".format(self.ceff_p_over_nkB, self.ceff_v_over_nkB))
+
+		print("\nTotal cv/nkB estimate (add ideal electrons):")
+		print("c_v_tot_estimate = {0:.3f}".format( (self.ceff_v_over_nkB  + self.Zbar*3/2)/(1 + self.Zbar)  ))
 
 
+	def make_TiTe_table(self, ε_table=0.01, N_table=2):
+		self.mini_atom_table = np.zeros((N_table,N_table)).tolist()
+		self.Te_table = np.zeros((N_table,N_table))
+		self.Ti_table = np.zeros((N_table,N_table))
+		self.u_table = np.zeros((N_table,N_table))
 
+		Ti_list = self.Te*np.linspace(1-ε_table, 1+ε_table, num = N_table)
+		Te_list = self.Ti*np.linspace(1-ε_table, 1+ε_table, num = N_table)
+		
+		for i, Ti_i in enumerate(Ti_list):
+			for j, Te_j in enumerate(Te_list):
+				tmp_qsp = self.make_qsp(self.ni_cc, self.Zbar, Ti_i, Te_j)
+				tmp_hnc = self.make_hnc(tmp_qsp, self.Zbar)
+				
+				temp_ratio = self.hnc.Temp_matrix/tmp_hnc.Temp_matrix
+				c_s_k_guess = temp_ratio[:,:,np.newaxis] * self.hnc.c_s_k_matrix.copy()
+				self.run_hnc(tmp_hnc, tmp_qsp, c_s_k_guess = c_s_k_guess)
+
+				self.mini_atom_table[i][j] = tmp_hnc
+				
+				self.u_table[i,j] = tmp_hnc.total_energy_density()/self.qsp.ri**3 
+				self.Te_table[i,j] = Te_j
+				self.Ti_table[i,j] = Ti_i
+	
+	def get_cv(self, ε_derivative=1e-6, **table_kwargs):
+		self.make_TiTe_table(**table_kwargs)
+
+		self.ci_v_AU = 0.5*np.sum(  (self.u_table[1,:]-self.u_table[0,:])/(self.Ti_table[1,:]-self.Ti_table[0,:])   ) # averages two Te's
+		self.ce_v_AU = 0.5*np.sum(  (self.u_table[:,1]-self.u_table[:,0])/(self.Te_table[:,1]-self.Te_table[:,0])   ) # averages two Ti's
+		self.c_v_AU = self.ci_v_AU + self.ce_v_AU
+		
+		self.ci_v_over_nkB = self.ci_v_AU/self.hnc.rho[0] * self.qsp.ri**3 #
+		self.ce_v_over_nkB = self.ce_v_AU/self.hnc.rho[1] * self.qsp.ri**3 #
+		self.c_v_over_nkB = self.c_v_AU /np.sum(self.hnc.rho) * self.qsp.ri**3
+		
+		self.ci_v_SI_vol  = self.ci_v_AU*k_B/(aB**3) #J/m^3/K
+		self.ce_v_SI_vol  = self.ce_v_AU*k_B/(aB**3) #J/m^3/K
+		self.c_v_SI_vol   = self.c_v_AU *k_B/(aB**3) #J/m^3/K
+		
+		# self.E_over_nkBT = self.hnc.U/( self.qsp.Ti*N )
+		
+		print("\n_____________________________\nHeat Capacity Results ")
+		print("c^e_v = {0:.3e} [J/m^3/K], c^i_v  = {1:.3e} [J/m^3/K] ".format(self.ce_v_SI_vol, self.ci_v_SI_vol))
+		print("c_v = {0:.3e} [J/m^3/K] ".format(self.c_v_SI_vol))
+
+		print("\nc^e_v/(ne kB)= {0:.3f} , c^i_v/(ni kB)   = {1:.3f} ".format(self.ce_v_over_nkB, self.ci_v_over_nkB))
+		print("c_v/(n kB) = {0:.3f} ".format(self.c_v_over_nkB))
+
+		
+
+		
 
 	    
 
