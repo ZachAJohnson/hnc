@@ -25,16 +25,17 @@ class CMEP_Atom():
 		self.hnc_solve_options.update(hnc_solve_options)
 		self.root_options.update(root_options)
 
-
-		if Zbar==None:
-			self.Zbar = self.ThomasFermiZbar()
-
 		self.Z, self.A, self.Zbar = Z, A, Zbar
 		self.ni_cc = ni_cc
 		self.Te = Te_in_eV*eV_to_AU
 		self.Ti = Ti_in_eV*eV_to_AU
-		
+		print("Te_in_eV: {0:.3f}".format(Te_in_eV))
+		print("Ti_in_eV: {0:.3f}".format(Ti_in_eV))
 		self.r_c = self.qsp_options['r_c']
+
+		if Zbar==None:
+			self.Zbar = self.ThomasFermiZbar(self.Z, self.ni_cc, Te_in_eV)
+			print("Te: {0:.3f} eV, Zbar = {1:.3f}".format(Te_in_eV, self.Zbar))
 
 		self.names = ["ion", "electron"] 
 		self.Picard_max_err = Picard_max_err
@@ -42,6 +43,44 @@ class CMEP_Atom():
 		self.hnc = self.make_hnc(self.qsp, self.Zbar)
 		# self.run_hnc(self.hnc, self.qsp)
 	
+	def ThomasFermiZbar(self, Z, num_density, T):
+		"""
+		Finite Temperature Thomas Fermi Charge State using 
+		R.M. More, "Pressure Ionization, Resonances, and the
+		Continuity of Bound and Free States", Adv. in Atomic 
+		Mol. Phys., Vol. 21, p. 332 (Table IV).
+
+		Z = atomic number
+		num_density = number density (1/cc)
+		T = temperature (eV)
+		"""
+
+		alpha = 14.3139
+		beta = 0.6624
+		a1 = 0.003323
+		a2 = 0.9718
+		a3 = 9.26148e-5
+		a4 = 3.10165
+		b0 = -1.7630
+		b1 = 1.43175
+		b2 = 0.31546
+		c1 = -0.366667
+		c2 = 0.983333
+
+		convert = num_density*1.6726e-24
+		R = convert/Z
+		T0 = T/Z**(4./3.)
+		Tf = T0/(1 + T0)
+		A = a1*T0**a2 + a3*T0**a4
+		B = -np.exp(b0 + b1*Tf + b2*Tf**7)
+		C = c1*Tf + c2
+		Q1 = A*R**B
+		Q = (R**C + Q1**C)**(1/C)
+		x = alpha*Q**beta
+
+		return Z*x/(1 + x + np.sqrt(1 + 2.*x))
+
+
 	def make_βu_matrix_from_qsp(self, hnc, qsp):
 		pseudopotential, add_bridge, bridge = self.βu_options[ 'pseudopotential' ], self.βu_options['add_bridge'], self.βu_options['bridge']
 		r_array = hnc.r_array
@@ -64,7 +103,7 @@ class CMEP_Atom():
 	def make_qsp(self, ni_cc, Zbar, Ti, Te):
 		n_in_AU = ni_cc*1e6 *aB**3
 		ri = QSP_HNC.rs_from_n(n_in_AU)
-		qsp = QSP_HNC(self.Z, self.A, Zbar, Ti, Te, ri, Zbar*n_in_AU, **self.qsp_options)
+		qsp = QSP_HNC(self.Z, self.A, Zbar, Te, Ti, ri, Zbar*n_in_AU, **self.qsp_options)
 		return qsp
 
 	def make_hnc(self, qsp, Zbar):
@@ -126,28 +165,28 @@ class CMEP_Atom():
 		U, P = self.get_effective_ion_U_P(hnc, qsp)
 		return U + P*Vol_AU
 
-	def get_full_U_P(self, hnc, qsp):
-	    r, dr = qsp.ri*hnc.r_array, qsp.ri*hnc.del_r
-	    Vol_AU = 4/3 * π * (hnc.R_max*qsp.ri)**3
+	# def get_full_U_P(self, hnc, qsp):
+	#     r, dr = qsp.ri*hnc.r_array, qsp.ri*hnc.del_r
+	#     Vol_AU = 4/3 * π * (hnc.R_max*qsp.ri)**3
 
-	    g_r, βveff_r, T, n_AU = hnc.heff_r_matrix[0,0] + 1, hnc.βueff_r_matrix[0,0], qsp.Ti, qsp.ni
-	    veff_r = βveff_r*T
-	    F = -np.gradient(veff_r, r)
-	    veff_r = βveff_r*T
+	#     g_r, βveff_r, T, n_AU = hnc.heff_r_matrix[0,0] + 1, hnc.βueff_r_matrix[0,0], qsp.Ti, qsp.ni
+	#     veff_r = βveff_r*T
+	#     F = -np.gradient(veff_r, r)
+	#     veff_r = βveff_r*T
 
-	    N = Vol_AU*n_AU 
+	#     N = Vol_AU*n_AU 
 	    
-	    U_ideal = 3/2 * N * T
-	    P_ideal = n_AU * T
+	#     U_ideal = 3/2 * N * T
+	#     P_ideal = n_AU * T
 	    
-	    U_ex    = 2*π*n_AU*N * np.sum( veff_r * g_r * r**2 * dr, axis=0 )
-	    P_ex    = 2*π/3 * n_AU**2 * np.sum( F * g_r * r**3 * dr, axis=0)
-	    return U_ideal + U_ex, P_ideal + P_ex
+	#     U_ex    = 2*π*n_AU*N * np.sum( veff_r * g_r * r**2 * dr, axis=0 )
+	#     P_ex    = 2*π/3 * n_AU**2 * np.sum( F * g_r * r**3 * dr, axis=0)
+	#     return U_ideal + U_ex, P_ideal + P_ex
 
-	def get_full_H(self, hnc, qsp):
-		Vol_AU = 4/3 * π * (hnc.R_max* qsp.ri)**3
-		U, P = self.get_effective_ion_U_P(hnc, qsp)
-		return U + P*Vol_AU
+	# def get_full_H(self, hnc, qsp):
+	# 	Vol_AU = 4/3 * π * (hnc.R_max* qsp.ri)**3
+	# 	U, P = self.get_effective_ion_U_P(hnc, qsp)
+	# 	return U + P*Vol_AU
 
 	def make_nT_table(self, ε_table=0.01, N_table=2):
 		self.mini_atom_table = np.zeros((N_table,N_table)).tolist()
@@ -231,13 +270,16 @@ class CMEP_Atom():
 		self.Ti_table = np.zeros((N_table,N_table))
 		self.u_table = np.zeros((N_table,N_table))
 
-		Ti_list = self.Te*np.linspace(1-ε_table, 1+ε_table, num = N_table)
-		Te_list = self.Ti*np.linspace(1-ε_table, 1+ε_table, num = N_table)
+		Ti_list = self.Ti*np.linspace(1-ε_table, 1+ε_table, num = N_table)
+		Te_list = self.Te*np.linspace(1-ε_table, 1+ε_table, num = N_table)
 		
 		for i, Ti_i in enumerate(Ti_list):
 			for j, Te_j in enumerate(Te_list):
-				tmp_qsp = self.make_qsp(self.ni_cc, self.Zbar, Ti_i, Te_j)
-				tmp_hnc = self.make_hnc(tmp_qsp, self.Zbar)
+				Zbar = self.ThomasFermiZbar(self.Z, self.ni_cc, Te_j/eV_to_AU)
+				print("Te: {0:.3f} eV, Zbar = {1:.3f}".format(Te_j/eV_to_AU, Zbar))
+
+				tmp_qsp = self.make_qsp(self.ni_cc, Zbar, Ti_i, Te_j)
+				tmp_hnc = self.make_hnc(tmp_qsp, Zbar)
 				
 				temp_ratio = self.hnc.Temp_matrix/tmp_hnc.Temp_matrix
 				c_s_k_guess = temp_ratio[:,:,np.newaxis] * self.hnc.c_s_k_matrix.copy()
@@ -245,7 +287,7 @@ class CMEP_Atom():
 
 				self.mini_atom_table[i][j] = tmp_hnc
 				
-				self.u_table[i,j] = tmp_hnc.total_energy_density()/self.qsp.ri**3 
+				self.u_table[i,j]  = tmp_hnc.total_energy_density()/self.qsp.ri**3 
 				self.Te_table[i,j] = Te_j
 				self.Ti_table[i,j] = Ti_i
 	

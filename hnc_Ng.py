@@ -431,17 +431,21 @@ class HNC_solver():
         return tot_err
     
 
-    def excess_energy_density(self):
+    def excess_energy_density_matrix(self):
 
         u_matrix = self.βu_r_matrix*self.Temp_matrix[:,:,np.newaxis]
         g_matrix = self.h_r_matrix+1
         rho_matrix = self.rho[:,np.newaxis]*self.rho[np.newaxis,:]
         r = self.r_array[np.newaxis,np.newaxis,:]
         dr = self.del_r
-        potential_species_sum = np.sum(rho_matrix[:,:,np.newaxis]*u_matrix*g_matrix*r**2*dr)
+        
+        u_ex_matrix = np.sum(2*π*rho_matrix[:,:,np.newaxis]*u_matrix*g_matrix*r**2*dr,axis=2)
 
-        u_ex = 2*π*potential_species_sum
+        return u_ex_matrix
 
+    def excess_energy_density(self):
+        u_ex_matrix = self.excess_energy_density_matrix()
+        u_ex = np.sum(u_ex_matrix)
         return u_ex
     
     def total_energy_density(self):
@@ -449,7 +453,7 @@ class HNC_solver():
         u_ex = self.excess_energy_density()
         u_id = 3/2 * np.sum(self.rho*self.Temp_list)
 
-        return u_ex + u_id
+        return u_id + u_ex
 
     def guess_c_s_k_matrix(self, c_s_k_matrix):
         γs_k_matrix = self.get_γs_k_matrix(c_s_k_matrix)                           # 1. c_k, u_l_k -> γ_k   (Definition)
