@@ -443,6 +443,13 @@ class HNC_solver():
         u_ex = 2*π*potential_species_sum
 
         return u_ex
+    
+    def total_energy_density(self):
+
+        u_ex = self.excess_energy_density()
+        u_id = 3/2 * np.sum(self.rho*self.Temp_list)
+
+        return u_ex + u_id
 
     def guess_c_s_k_matrix(self, c_s_k_matrix):
         γs_k_matrix = self.get_γs_k_matrix(c_s_k_matrix)                           # 1. c_k, u_l_k -> γ_k   (Definition)

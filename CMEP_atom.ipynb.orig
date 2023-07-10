@@ -66,7 +66,40 @@
   },
   {
    "cell_type": "code",
+<<<<<<< HEAD
+   "execution_count": 2,
+   "id": "754dd9d8",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "AU_to_Pa  = 2.9421015697e13 \n",
+    "Pa_to_bar = 1e-5\n",
+    "AU_to_bar = AU_to_Pa*Pa_to_bar "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "id": "1e03d793",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "cases_converged_thusfar = {'H1':True,'C1':True, 'Al1':True, 'Cu1': True, 'Be1': True, 'Au1': False, 'H2': True, 'H3': True, 'C2': False, 'C3': True, 'Al2': False, 'Al3': True,\n",
+    " 'Cu2': False, 'Cu3': True, 'H11': False, 'H21': False, 'H31': False, 'C11': False, 'C21': False, 'C31': False, 'Al11': False, 'Al21': False, \n",
+    " 'Al31': False, 'Cu11': False, 'Cu21': False, 'Cu31': False, 'H12': True, 'H22': True, 'H32': False, 'C12': True, 'C22': False, 'C32': False, \n",
+    " 'Al12': True, 'Al22': False, 'Al32': False, 'Cu12': True, 'Cu22': False, 'Cu32': False, 'H13': True, 'H23': True, 'H33': True, 'C13': True,\n",
+    "  'C23': True, 'C33': False, 'Al13': False, 'Al23': False, 'Al33': False, 'Cu13': True, 'Cu23': False, 'Cu33': False, 'H14': False, 'H24': False, \n",
+    "  'H34': False, 'C14': False, 'C24': False, 'C34': False, 'Al14': False, 'Al24': False, 'Al34': False, 'Cu14': False, 'Cu24': False, 'Cu34': False,\n",
+    "   'H15': False, 'H25': False, 'H35': False, 'C15': False, 'C25': False, 'C35': False, 'Al15': False, 'Al25': False, 'Al35': False, 'Cu15': False,\n",
+    "    'Cu25': False, 'Cu35': False, 'H16': False}"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+=======
    "execution_count": 17,
+>>>>>>> 9d98b1d8b1015274ca45efbe84fe82be8444afb8
    "id": "0b094fa9",
    "metadata": {},
    "outputs": [
