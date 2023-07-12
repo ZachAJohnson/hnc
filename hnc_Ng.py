@@ -613,7 +613,7 @@ class HNC_solver():
                 print("Warning: HNC_solver did not converge within the specified number of iterations.")                
                 break
 
-            if err_c < tol:
+            if actual_tot_err < tol:
                 converged = 0
 
             iteration += 1
