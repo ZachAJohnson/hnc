@@ -443,10 +443,35 @@ class HNC_solver():
 
         return u_ex_matrix
 
+    def excess_pressure_matrix(self):
+
+        r = self.r_array[np.newaxis,np.newaxis,:]
+        dr = self.del_r
+        
+        u_matrix = self.βu_r_matrix*self.Temp_matrix[:,:,np.newaxis]
+        du_dr_matrix = np.gradient(u_matrix, self.r_array, axis=2)
+
+        g_matrix = self.h_r_matrix+1
+        rho_matrix = self.rho[:,np.newaxis]*self.rho[np.newaxis,:]
+        
+        P_ex_matrix = -np.sum(2*π/3*rho_matrix[:,:,np.newaxis]*du_dr_matrix*g_matrix*r**3*dr,axis=2)
+
+        return P_ex_matrix
+
+    def pressure_matrix(self):
+        P_ex_matrix = self.excess_pressure_matrix()
+        P_id_matrix = np.diag(self.rho*self.Temp_list)
+        return P_ex_matrix + P_id_matrix
+
     def excess_energy_density(self):
         u_ex_matrix = self.excess_energy_density_matrix()
         u_ex = np.sum(u_ex_matrix)
         return u_ex
+    
+    def excess_pressure(self):
+        P_ex_matrix = self.excess_pressure_matrix()
+        P_ex = np.sum(P_ex_matrix)
+        return P_ex
     
     def total_energy_density(self):
 
@@ -454,6 +479,13 @@ class HNC_solver():
         u_id = 3/2 * np.sum(self.rho*self.Temp_list)
 
         return u_id + u_ex
+
+    def total_pressure(self):
+
+        P_ex = self.excess_pressure()
+        P_id = np.sum(self.rho*self.Temp_list)
+
+        return P_id + P_ex
 
     def guess_c_s_k_matrix(self, c_s_k_matrix):
         γs_k_matrix = self.get_γs_k_matrix(c_s_k_matrix)                           # 1. c_k, u_l_k -> γ_k   (Definition)

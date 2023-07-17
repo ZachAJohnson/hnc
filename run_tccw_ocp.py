@@ -167,7 +167,7 @@ cases_converged_thusfar = {'H1':True,'C1':True, 'Al1':True, 'Cu1': True, 'Be1': 
    'H15': False, 'H25': False, 'H35': False, 'C15': False, 'C25': False, 'C35': False, 'Al15': False, 'Al25': False, 'Al35': False, 'Cu15': False,
     'Cu25': False, 'Cu35': False, 'H16': False}
 
-for tccw_case in tccw_cases[5:6]:
+for tccw_case in [tccw_cases[1],tccw_cases[2],tccw_cases[4]]:
     t0=time()
     α = 0.1
     case_converged=False
@@ -192,7 +192,7 @@ for tccw_case in tccw_cases[5:6]:
     # while case_converged==False:
     try:
         print('')
-        N_bins, R_max = 300, 3
+        N_bins, R_max = 500, 10
         atom_onlyion, _ = set_hnc_onlyion(ni, Te, Z, A, Zbar, 
                                     pseudopotential=True, oz_type='svt',r_c=r_c, 
                                     add_bridge=True, bridge='ocp', N_bins=N_bins, R_max=R_max)

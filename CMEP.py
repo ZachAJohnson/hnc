@@ -141,6 +141,9 @@ class CMEP_Atom():
 
 		hnc.Heff = self.get_effective_ion_H(hnc, qsp)
 		hnc.Ueff, hnc.Peff = self.get_effective_ion_U_P(hnc, qsp)
+		hnc.u_energy_density = hnc.total_energy_density()/self.qsp.ri**3 
+		hnc.Pressure = hnc.total_pressure()/self.qsp.ri**3 
+
 
 	def get_effective_ion_U_P(self, hnc, qsp):
 	    r, dr = qsp.ri*hnc.r_array, qsp.ri*hnc.del_r
