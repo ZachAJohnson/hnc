@@ -267,7 +267,7 @@ class CMEP_Atom():
 		print("c_v_tot_estimate = {0:.3f}".format( (self.ceff_v_over_nkB  + self.Zbar*3/2)/(1 + self.Zbar)  ))
 
 
-	def make_TiTe_table(self, ε_table=0.01, N_table=2):
+	def make_TiTe_table(self, ε_table=0.01, N_table=2, Zbar_fixed=False):
 		self.mini_atom_table = np.zeros((N_table,N_table)).tolist()
 		self.Te_table = np.zeros((N_table,N_table))
 		self.Ti_table = np.zeros((N_table,N_table))
@@ -278,7 +278,11 @@ class CMEP_Atom():
 		
 		for i, Ti_i in enumerate(Ti_list):
 			for j, Te_j in enumerate(Te_list):
-				Zbar = self.ThomasFermiZbar(self.Z, self.ni_cc, Te_j/eV_to_AU)
+				if Zbar_fixed:
+					Zbar = self.Zbar
+				else:
+					Zbar = self.ThomasFermiZbar(self.Z, self.ni_cc, Te_j/eV_to_AU)
+					
 				print("Te: {0:.3f} eV, Zbar = {1:.3f}".format(Te_j/eV_to_AU, Zbar))
 
 				tmp_qsp = self.make_qsp(self.ni_cc, Zbar, Ti_i, Te_j)
