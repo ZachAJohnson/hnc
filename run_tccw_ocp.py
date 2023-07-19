@@ -167,7 +167,7 @@ cases_converged_thusfar = {'H1':True,'C1':True, 'Al1':True, 'Cu1': True, 'Be1': 
    'H15': False, 'H25': False, 'H35': False, 'C15': False, 'C25': False, 'C35': False, 'Al15': False, 'Al25': False, 'Al35': False, 'Cu15': False,
     'Cu25': False, 'Cu35': False, 'H16': False}
 
-for tccw_case in [tccw_cases[1],tccw_cases[2],tccw_cases[4]]:
+for tccw_case in [tccw_cases[1]]:
     t0=time()
     α = 0.1
     case_converged=False
@@ -195,7 +195,7 @@ for tccw_case in [tccw_cases[1],tccw_cases[2],tccw_cases[4]]:
         N_bins, R_max = 500, 10
         atom_onlyion, _ = set_hnc_onlyion(ni, Te, Z, A, Zbar, 
                                     pseudopotential=True, oz_type='svt',r_c=r_c, 
-                                    add_bridge=True, bridge='ocp', N_bins=N_bins, R_max=R_max)
+                                    add_bridge=True, bridge='yukawa', N_bins=N_bins, R_max=R_max)
         atom_onlyion.c_s_k_matrix[0,0]*=0
         atom_onlyion.HNC_solve(alpha_method='fixed', alpha_Picard = 5e-1, tol=1e-8, alpha_Ng=0.1, 
                        iters_to_wait=1e4, iters_to_use=2, num_iterations=1e3, verbose=True)
@@ -207,11 +207,11 @@ for tccw_case in [tccw_cases[1],tccw_cases[2],tccw_cases[4]]:
 
         atom, qsp = set_hnc(ni, Te, Z, A, Zbar, 
                         pseudopotential=True, oz_type='svt',r_c=r_c, 
-                        add_bridge=True, bridge='ocp',N_bins=N_bins, R_max=R_max)
+                        add_bridge=True, bridge='yukawa',N_bins=N_bins, R_max=R_max)
 
         atom.c_s_k_matrix[0,0] = 0.5*atom_onlyion.c_s_k_matrix[0,0]
 
-        Picard_converged = atom.HNC_solve(alpha_method='fixed', alpha_Picard = 0.01, tol=1e-3, alpha_Ng=1e-10, 
+        Picard_converged = atom.HNC_solve(alpha_method='fixed', alpha_Picard = 0.1, tol=1e-3, alpha_Ng=1e-10, 
                        iters_to_wait=1e4, num_iterations=1e3)
         
         options={'eps':1e-6,'maxfev':50000,'factor':100,'xtol':1e-5} 
