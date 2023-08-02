@@ -43,7 +43,8 @@ class CMEP_Atom():
 		self.hnc = self.make_hnc(self.qsp, self.Zbar)
 		# self.run_hnc(self.hnc, self.qsp)
 	
-	def ThomasFermiZbar(self, Z, num_density, T):
+	@staticmethod
+	def ThomasFermiZbar( Z, num_density, T):
 		"""
 		Finite Temperature Thomas Fermi Charge State using 
 		R.M. More, "Pressure Ionization, Resonances, and the

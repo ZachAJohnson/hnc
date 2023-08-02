@@ -150,9 +150,10 @@ def yukawa_plus_gaussian_cos(r, a ,b ,c, d ,e, f, g, h, i, j, k, l):
 #########################
 #########################
 
-mixture_file = "/home/zach/plasma/hnc/data/TCCW_single_species_data.csv"
-tccw_mixture_data = read_csv(mixture_file)
-tccw_cases = [tccw_mixture_data.iloc[n] for n in range(len(tccw_mixture_data))]
+# species_file = "/home/zach/plasma/hnc/data/TCCW_single_species_data.csv"
+species_file = "/home/zach/plasma/hnc/data/TCCW_three_species_paper_data.csv"
+tccw_species_data = read_csv(species_file)
+tccw_cases = [tccw_species_data.iloc[n] for n in range(len(tccw_species_data))]
 
 case_successes = {}
 atom_case_successes = {}
@@ -167,7 +168,7 @@ cases_converged_thusfar = {'H1':True,'C1':True, 'Al1':True, 'Cu1': True, 'Be1': 
    'H15': False, 'H25': False, 'H35': False, 'C15': False, 'C25': False, 'C35': False, 'Al15': False, 'Al25': False, 'Al35': False, 'Cu15': False,
     'Cu25': False, 'Cu35': False, 'H16': False}
 
-for tccw_case in [tccw_cases[1]]:
+for tccw_case in [tccw_cases[0], tccw_cases[1], tccw_cases[2]]:
     t0=time()
     α = 0.1
     case_converged=False
@@ -178,11 +179,12 @@ for tccw_case in [tccw_cases[1]]:
     Te = tccw_case['Temperature [eV]']*eV_to_AU
     Ti = Te
     Z = tccw_case['Atomic Number']
-    # Zbar = tccw_case['Zbar (TF)']
-    Zbar = tccw_case['Zbar (TFDW)']
+    Zbar = tccw_case['Zbar (AAM)']
+    # Zbar = tccw_case['Zbar (TFDW)']
     A = tccw_case['Atomic Weight [a.u.]']
     r_s = tccw_case['Wigner-Seitz Radius [cm]']
     r_c = tccw_case['Average-Bound Radius [cm]']/r_s
+    if r_c==0: r_c = 1e-4
     print(r_s, r_c)
     print('\n______________________________\nCase num: {0} Case ID: {1}'.format(case_num, case_id))
     print("Te = {0:.3e} eV, n_i = {1:.3e} 1/cc, r_c/r_s = {2:.3f}".format(Te/eV_to_AU, ni, r_c))
@@ -224,6 +226,7 @@ for tccw_case in [tccw_cases[1]]:
         case_converged = newton_converged
 
         atom.invert_HNC_OZ([1])
+        atom.βueff_r_matrix[0,0] = atom.βueff_r_matrix[0,0] + atom.Bridge_function_Yukawa(atom.r_array, qsp.Γii, qsp.get_κ())
 
     except Exception as err:
         print("Running Case ID: {0} broken: {1}. Skipping.".format(case_id, err) )
@@ -238,6 +241,8 @@ for tccw_case in [tccw_cases[1]]:
     if case_converged==True:
         g_r_header = "atom {0} T={1:.1f} eV, r_i={2:.2f}, Zbar (TFDW) ={3:.3f} , solve_err={4:.3e}\n r/r_i \t\t\t\t gii(r/r_i) \t\t\t\t gie(r/r_i) \t\t\t\t gee(r/r_i)".format(case_id, Te/eV_to_AU, Zbar, qsp.ri,newton_final_err)
         np.savetxt("./fits/{0}_g_r.txt".format(case_id), np.array([atom.r_array, atom.h_r_matrix[0,0]+1, atom.h_r_matrix[0,1]+1, atom.h_r_matrix[1,1]+1]).T, header=g_r_header)
+        βueff_r_header = "atom {0} T={1:.1f} eV, r_i={2:.2f}, Zbar (TFDW) ={3:.3f} , solve_err={4:.3e}\n r/r_i \t\t\t\t βuii_eff(r/r_i)".format(case_id, Te/eV_to_AU, Zbar, qsp.ri, newton_final_err)
+        np.savetxt("./fits/{0}_βu_eff_rawdata.txt".format(case_id), np.array([atom.r_array, atom.βueff_r_matrix[0,0]]).T, header=βueff_r_header)
         try:
             fig, ax = plt.subplots(figsize=(8,6),facecolor='w')
             fig.suptitle(r"atom {0} $T=${1:.1f} eV, $r_i$={2:.2f}, solve_err={3:.3e}".format(case_id, Te/eV_to_AU, qsp.ri, newton_final_err), fontsize=20)
