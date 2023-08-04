@@ -59,9 +59,9 @@ class QSP_HNC():
         self.lambda_TF = np.sqrt( self.Te / (4*π*self.ne)  )
 
         if self.which_Tij=='thermal':
-            self.Tie_c = self.Tei_thermal(self.Te_c, self.Tq)
+            self.Tie_c = self.Tei_thermal(self.Te_c, self.Ti)
         elif self.which_Tij=='geometric':
-            self.Tie_c = self.Tei_geometric(self.Te_c, self.Tq)
+            self.Tie_c = self.Tei_geometric(self.Te_c, self.Ti)
 
         self.βe_c  = 1/self.Te_c
         self.βie_c = 1/self.Tie_c 
@@ -71,8 +71,11 @@ class QSP_HNC():
         self.mij = np.array([[self.m_i, self.μ],
                               [self.μ, m_e]])
 
-        self.Λee  = 1/np.sqrt(π*m_e*self.Te_c )/self.ri
-        self.Λei  = 1/np.sqrt(2*π*m_e*self.Tie_c )/self.ri 
+        # self.Λee  = 1/np.sqrt(2*π*(m_e/2)*self.Te_c )/self.ri 
+        # self.Λei  = 1/np.sqrt(2*π*self.μ*self.Tie_c )/self.ri
+
+        self.Λee  = 1/np.sqrt(2*(m_e/2)*self.Te_c )/self.ri #Bredow 
+        self.Λei  = 1/np.sqrt(2*self.μ*self.Tie_c )/self.ri #Bredow         
         
         self.Γee =  self.βe_c/self.ri 
         self.Γei = -self.Zstar*self.βie_c/self.ri
@@ -130,6 +133,7 @@ class QSP_HNC():
         # return  np.log(2) * np.exp(-4*π* r**2 /( Λe**2))
         #return -np.log(1 - 0.5*np.exp(-r**2/(2*π*Λe**2)) )
         return np.log(2)*np.exp(-r**2/(π*np.log(2)*Λ**2))
+        # return np.log(2)*np.exp(-np.log(2)*r**2/(π*Λ**2))
 
     
     ######### Build Actual QSP's
