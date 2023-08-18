@@ -171,7 +171,7 @@ class Two_Electron_Plasma():
 		h_k = self.hnc.FT_r_2_k(h_r)
 
 		I_plus_h_rho_inverse = 1/(1 + h_k*self.hnc.rho[0])
-		I_plus_h_rho_inverse = 1/(1 + self.n_up_fraction*h_k*self.hnc.rho[0]) #???
+		# I_plus_h_rho_inverse = 1/(1 + self.n_up_fraction*h_k*self.hnc.rho[0]) #???
 		c_k = I_plus_h_rho_inverse * h_k
 		c_r = self.hnc.FT_k_2_r(c_k)
 
