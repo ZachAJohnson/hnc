@@ -71,11 +71,11 @@ class QSP_HNC():
         self.mij = np.array([[self.m_i, self.μ],
                               [self.μ, m_e]])
 
-        # self.Λee  = 1/np.sqrt(2*π*(m_e/2)*self.Te_c )/self.ri 
-        # self.Λei  = 1/np.sqrt(2*π*self.μ*self.Tie_c )/self.ri
+        self.Λee  = 1/np.sqrt(2*π*(m_e/2)*self.Te_c )/self.ri 
+        self.Λei  = 1/np.sqrt(2*π*self.μ*self.Tie_c )/self.ri
 
-        self.Λee  = 1/np.sqrt(2*(m_e/2)*self.Te_c )/self.ri #Bredow 
-        self.Λei  = 1/np.sqrt(2*self.μ*self.Tie_c )/self.ri #Bredow         
+        # self.Λee  = 1/np.sqrt(2*(m_e/2)*self.Te_c )/self.ri #Bredow 
+        # self.Λei  = 1/np.sqrt(2*self.μ*self.Tie_c )/self.ri #Bredow         
         
         self.Γee =  self.βe_c/self.ri 
         self.Γei = -self.Zstar*self.βie_c/self.ri

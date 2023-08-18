@@ -47,13 +47,11 @@ class Two_Electron_Plasma():
 		self.Picard_max_err = Picard_max_err
 		self.qsp = self.make_qsp(self.ni_cc, self.Zbar, self.Ti, self.Te)
 		self.hnc = self.make_hnc(self.qsp, self.Zbar)
+		print("Warning, small T<<EF disagree with DW. Need to adjust?")
+		self.get_βPauli()
+		self.make_βu_matrix_from_qsp(self.hnc, self.qsp)
 		# self.run_hnc(self.hnc, self.qsp)
 	
-		where to add this stuff
-		η = find_η(Te_AU, atom.qsp.ne )
-		h_ee_ID_explicit = np.array([h_ee_ID(atom.qsp.ne, Te_AU, r*atom.qsp.ri, η ) for r in atom.hnc.r_array])
-		h_ee_ID_explicit
-
 	@staticmethod
 	def ThomasFermiZbar( Z, num_density, T):
 		"""
@@ -101,8 +99,11 @@ class Two_Electron_Plasma():
 		else:
 			βvei = qsp.βvei(r_array)
 		
-		βu_r_matrix = np.array([[qsp.βvii(r_array), βvei],
-		                      [βvei, qsp.βvee(r_array)]])
+		βu_r_matrix = np.array([[qsp.βvii(r_array), qsp.βvei(r_array), qsp.βvei(r_array) ],
+		                        [qsp.βvei(r_array), qsp.βv_Deutsch(qsp.Γee, r_array, qsp.Λee) + self.βP_uu, qsp.βvei(r_array)],
+		                        [qsp.βvei(r_array), qsp.βvei(r_array), qsp.βv_Deutsch(qsp.Γee, r_array, qsp.Λee) + self.βP_uu]])
+
+		print("Warning, setting qsp based on self βP")
 		if add_bridge:
 			if bridge=='ocp':
 				βu_r_matrix[0,0] = βu_r_matrix[0,0] - HNC_solver.Bridge_function_OCP(r_array, qsp.Γii)
@@ -121,9 +122,12 @@ class Two_Electron_Plasma():
 	def make_hnc(self, qsp, Zbar):
 		densities_in_rs = np.array([  3/(4*π), Zbar*self.n_up_fraction* 3/(4*π), Zbar*self.n_down_fraction*3/(4*π) ])
 		temperatures_AU = np.array([qsp.Ti, qsp.Te_c, qsp.Te_c])
-		masses= np.array([qsp.m_i, m_e])
-		hnc = HNC_solver(2, qsp.Γ_matrix, densities_in_rs, temperatures_AU, masses, **self.hnc_options)
-		self.make_βu_matrix_from_qsp(hnc, qsp)
+		masses= np.array([qsp.m_i, m_e, m_e])
+		Γ_matrix = np.array([[ qsp.Γii, qsp.Γei , qsp.Γei],
+					   [ qsp.Γei, qsp.Γee , qsp.Γee],
+					   [ qsp.Γei, qsp.Γee , qsp.Γee]])
+
+		hnc = HNC_solver(3, Γ_matrix, densities_in_rs, temperatures_AU, masses, **self.hnc_options)
 		return hnc
 
 	def run_onlyion_hnc(self):
@@ -131,7 +135,7 @@ class Two_Electron_Plasma():
 		self.onlyion_hnc.c_s_k_matrix *= 0
 		self.onlyion_hnc.HNC_solve(**self.hnc_solve_options)
 
-	def find_η(Te, ne):
+	def find_η(self, Te, ne):
 	    """
 	    Gets chemical potential in [AU] that gives density ne at temperature Te
 	    """
@@ -142,18 +146,38 @@ class Two_Electron_Plasma():
 	    η = root_and_info['x'][0]
 	    return η
 
-	def h_ee_ID(self, ne, T, r, η):
-	    sin_arg = np.sqrt(2*T*m_e)*r
-	    t_max = np.max([1/sin_arg, η ])
-	    
-	    t = np.linspace(0,t_max, num=10000) 
-	    dt = t[1]-t[0]
-	    κ = 3*(2*T*m_e) / (atom.qsp.k_F**3 * r)  * np.sum(dt* t*np.sin(sin_arg*t) /(1+np.exp(t**2-η) )  )
-	#     h_ee = -0.5*κ**2
-	    self.h_uu_ID = -κ**2
-	    
+	def get_η(self):
+		self.η = self.find_η(self.Te, self.qsp.ne)
 
+	def h_uu_ID_of_r(self, ne, T, r, η):
+		sin_arg = np.sqrt(2*T*m_e)*r
+		t_max = 5*η
 
+		t = np.linspace(0,t_max, num=10000) 
+		dt = t[1]-t[0]
+		κ = 3*(2*T*m_e) / (self.qsp.k_F**3 * r)  * np.sum(dt* t*np.sin(sin_arg*t) /(1+np.exp(t**2-η) )  )
+		#     h_ee = -0.5*κ**2
+		h_uu_ID = -κ**2
+		return h_uu_ID
+
+	def get_hee_ID(self):
+		self.get_η()
+		self.h_uu_ID = np.array([self.h_uu_ID_of_r(self.qsp.ne, self.Te, r , self.η) for r in self.hnc.r_array])
+		self.h_ee_ID = self.h_uu_ID/2
+
+	def get_βPauli(self): #Pauli potential
+		self.get_hee_ID()
+		h_r = self.h_uu_ID.copy() # could do ee instead
+		h_k = self.hnc.FT_r_2_k(h_r)
+
+		I_plus_h_rho_inverse = 1/(1 + h_k*self.hnc.rho[0])
+		# I_plus_h_rho_inverse = 1/(1 + self.n_up_fraction*h_k*self.hnc.rho[0]) #???
+		c_k = I_plus_h_rho_inverse * h_k
+		c_r = self.hnc.FT_k_2_r(c_k)
+
+		# Approximate with HNC
+		self.βP_uu = h_r - c_r - np.log(h_r+1)
+	   
 	def run_hnc(self, hnc=None, qsp=None, c_s_k_guess=None):
 		if hnc==None and qsp==None:
 			hnc = self.hnc

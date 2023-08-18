@@ -111,8 +111,11 @@ class HNC_solver():
         self.initialize_c_k()
         self.set_C_matrix()
 
-    def initialize_guess(self):
-        self.h_r_matrix  = -1 + np.exp(-self.βu_r_matrix)
+    def initialize_guess_from_h_r(self, h_r_matrix=None):
+        if (h_r_matrix == None).any():
+            self.h_r_matrix  = -1 + np.exp(-self.βu_r_matrix)
+        else:
+            self.h_r_matrix = h_r_matrix
         self.h_k_matrix  = self.FT_r_2_k_matrix(self.h_r_matrix)
         self.ρh_k_matrix = self.rho[:,np.newaxis,np.newaxis]*self.h_k_matrix
             
@@ -352,35 +355,38 @@ class HNC_solver():
         See Appendix of
         "Hypernetted chain solutions for the classical one‐component plasma up to Γ=7000" - Kin‐Chue Ng
         """
-        actual_c_s_k_n = self.c_s_k_matrix_list[-num_to_use:][::-1]# reverse so first index is the actual c_s_k
-        next_c_s_k_n = np.array([ self.guess_c_s_k_matrix(c_s_k_n) for c_s_k_n in actual_c_s_k_n])
+        actual_c_s_k_n = self.c_s_k_matrix_list[-num_to_use:][::-1]# f_n of Ng  with f[0]=f_n, f[1]=f_{n-1}
+        next_c_s_k_n = np.array([ self.guess_c_s_k_matrix(c_s_k_n) for c_s_k_n in actual_c_s_k_n]) # g_n
         # print(next_c_s_k_n.shape)
-        dn_list = next_c_s_k_n - actual_c_s_k_n
-        Δd_list = dn_list[0] - dn_list[1:]
-        Δd_flattened_list = np.array([Δd.flatten() for Δd in Δd_list])
+        dn_list = next_c_s_k_n - actual_c_s_k_n # d_n = g_n-f_n , 0 iff converged
+        print("|d_n|^2 = ", [np.linalg.norm(dn) for dn in dn_list]  )
 
-        A_sum_matrix = np.sum(Δd_flattened_list[:,np.newaxis]*Δd_flattened_list[np.newaxis,:] ,axis = (2) )
+        Δd_list = dn_list[0] - dn_list[1:] #  = [d_{01}, d_{02}, ... ]
+        Δd_flattened_list = np.array([Δd.flatten() for Δd in Δd_list]) # flatten the species matrix components
+
+        A_sum_matrix = np.sum(Δd_flattened_list[:,np.newaxis]*Δd_flattened_list[np.newaxis,:] ,axis = (2) ) # Each component (d_01, d_01),...
+        
         b_vec = np.sum(  dn_list[0].flatten() * Δd_flattened_list, axis=(1)  )
 
-        best_αs_list = np.linalg.inv(A_sum_matrix) @ b_vec
+        best_αs_list = np.linalg.inv(A_sum_matrix) @ b_vec # = [c_1, c_2]
 
         # Try by each species combination
-        best_αs_matrix = np.zeros((self.N_species, self.N_species, num_to_use-1))
-        actual_c_s_k_n = np.array(self.c_s_k_matrix_list)[-num_to_use:][::-1]# reverse so first index is the actual c_s_k
-        next_c_s_k_n = np.array([ self.guess_c_s_k_matrix(c_s_k_n) for c_s_k_n in actual_c_s_k_n])
+        # best_αs_matrix = np.zeros((self.N_species, self.N_species, num_to_use-1))
+        # actual_c_s_k_n = np.array(self.c_s_k_matrix_list)[-num_to_use:][::-1]# reverse so first index is the actual c_s_k
+        # next_c_s_k_n = np.array([ self.guess_c_s_k_matrix(c_s_k_n) for c_s_k_n in actual_c_s_k_n])
                 
-        for i in range(self.N_species):
-            for j in range(self.N_species):
-                # print(next_c_s_k_n.shape)
-                dn_list = next_c_s_k_n[:,i,j] - actual_c_s_k_n[:,i,j]
-                Δd_list = np.array(dn_list[0] - dn_list[1:])
-                # Δd_flattened_list = np.array([Δd for Δd in Δd_list])
+        # for i in range(self.N_species):
+        #     for j in range(self.N_species):
+        #         # print(next_c_s_k_n.shape)
+        #         dn_list = next_c_s_k_n[:,i,j] - actual_c_s_k_n[:,i,j]
+        #         Δd_list = np.array(dn_list[0] - dn_list[1:])
+        #         # Δd_flattened_list = np.array([Δd for Δd in Δd_list])
                 
-                A_sum_matrix = np.sum(Δd_list[:,np.newaxis]*Δd_list[np.newaxis,:] ,axis = (2) )
+        #         A_sum_matrix = np.sum(Δd_list[:,np.newaxis]*Δd_list[np.newaxis,:] ,axis = (2) )
 
-                b_vec = np.sum(  dn_list[0] * Δd_list, axis=(1)  )
-                best_αs_matrix[i,j] = np.linalg.inv(A_sum_matrix) @ b_vec
-        print(" α matrix, ", best_αs_matrix)
+        #         b_vec = np.sum(  dn_list[0] * Δd_list, axis=(1)  )
+        #         best_αs_matrix[i,j] = np.linalg.inv(A_sum_matrix) @ b_vec
+        # print(" α matrix, ", best_αs_matrix)
 
                 
 
@@ -404,12 +410,13 @@ class HNC_solver():
         # res = minimize(c_err_1 , best_αs_list, bounds=α_bounds, tol=tol, options={'maxiter':int(1e3)}, method=method) 
         # αs = res.x
         αs = best_αs_list
-        αs =  np.array([(1-np.sum(αs)), *αs])
+        αs =  np.array([(1-np.sum(αs)), *αs]) # = [(1-c_1 -c_2..., c_1, c_2, ...)]
         print(" αs: ", αs)
         # print(" Linear αs guess: ", best_αs_list)
         # print(" Result of αs minimization:", res.x, res.success, res.message)
         self.Ng_guess_c_s_k = np.sum(αs[:,np.newaxis,np.newaxis,np.newaxis]*next_c_s_k_n, axis=0)
-        new_c_s_k = self.Picard_c_s_k(self.c_s_k_matrix, self.Ng_guess_c_s_k, alpha=alpha)
+        # new_c_s_k = self.Picard_c_s_k(self.c_s_k_matrix, self.Ng_guess_c_s_k, alpha=alpha)
+        new_c_s_k = self.Ng_guess_c_s_k
         return  new_c_s_k
 
     def total_err(self, c_s_k_matrix):
@@ -573,13 +580,13 @@ class HNC_solver():
         converged = 1
         decreasing = True
         iteration = 1
-        self.tot_err_list, self.hnc_err_list  = [], []
         self.h_r_matrix_list, self.c_s_k_matrix_list = [], []
         self.u_ex_list = []
         self.h_r_matrix_list.append(self.h_r_matrix.copy())            
         self.c_s_k_matrix_list.append(self.c_s_k_matrix.copy())
         initial_error = self.total_err(self.c_s_k_matrix)
         print("0: Initial condition Total Error: {1:.3e}".format(iteration, initial_error))
+        self.tot_err_list, self.hnc_err_list  = [initial_error], [0]
         while converged!=0:
             old_c_s_k_matrix = self.c_s_k_matrix.copy()
             if iteration < iters_to_wait: #Picard at first
@@ -589,9 +596,10 @@ class HNC_solver():
                 best_run_index = np.argmin(self.tot_err_list)
                 self.c_s_k_matrix = self.c_s_k_matrix_list[best_run_index]
                 print("Starting Ng loop, using best index so far: ", best_run_index)
-                self.h_r_matrix_list = self.h_r_matrix_list[:best_run_index+1]
-                self.c_s_k_matrix_list = self.c_s_k_matrix_list[:best_run_index+1]
-                self.u_ex_list = self.u_ex_list[:best_run_index+1]
+                self.h_r_matrix_list = self.h_r_matrix_list[:best_run_index]
+                self.c_s_k_matrix_list = self.c_s_k_matrix_list[:best_run_index]
+                self.u_ex_list = self.u_ex_list[:best_run_index]
+                self.tot_err_list = self.tot_err_list[:best_run_index]
                 iteration+=1
                 continue
             else:
@@ -610,7 +618,7 @@ class HNC_solver():
             actual_tot_err = self.total_err(self.c_s_k_matrix)
             self.tot_err_list.append(actual_tot_err)
             self.hnc_err_list.append(hnc_err)
-            if iteration%100==0 and verbose==True:
+            if iteration%1==0 and verbose==True:
                 print("{0}: Change in c_r: {1:.3e}, HNC Error: {2:.3e}, Total Error: {3:.3e}".format(iteration, err_c, hnc_err, actual_tot_err))
             
             if len(self.tot_err_list) > iters_to_check:
@@ -629,11 +637,11 @@ class HNC_solver():
                     print("QUIT: Large Error at many iterations, and error not decreasing.")
                     converged=3
                     break
-            if np.isinf(hnc_err)==True and iteration>50 :
-                print("QUIT: HNC error infinite.")
-                break
+            # if np.isinf(hnc_err)==True and iteration>50 :
+            #     print("QUIT: HNC error infinite.")
+            #     break
             
-            if np.isinf(actual_tot_err)==True and iteration>10 :
+            if np.isinf(actual_tot_err)==True and iteration>20 :
                 print("QUIT: Total error infinite.")
                 break
 
