@@ -513,6 +513,8 @@ class HNC_solver():
 
         γs_r_matrix = self.FT_k_2_r_matrix(γs_k_matrix) # γ_k        -> γ_r   (FT)     
         h_r_matrix = -1 + np.exp(γs_r_matrix - self.βu_s_r_matrix) # 2. γ_r,u_s_r  -> h_r   (HNC)   
+        h_r_matrix = self.update_fixed_h(h_r_matrix)
+        
         h_r_matrix = np.where(h_r_matrix>self.h_max, self.h_max, h_r_matrix)
         h_k_matrix = self.FT_r_2_k_matrix(h_r_matrix)
         # Plug into HNC equation
