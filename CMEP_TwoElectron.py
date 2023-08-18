@@ -142,7 +142,7 @@ class Two_Electron_Plasma():
 	    η = root_and_info['x'][0]
 	    return η
 
-	def h_ee_ID(ne, T, r, η):
+	def h_ee_ID(self, ne, T, r, η):
 	    sin_arg = np.sqrt(2*T*m_e)*r
 	    t_max = np.max([1/sin_arg, η ])
 	    
