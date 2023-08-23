@@ -292,7 +292,7 @@ class HNC_solver():
         product = np.einsum('ikm,kjm->ijm', A, B)
         return product
     
-    #Updaters
+    #Updaters 
     def update_fixed_h(self, h_r_matrix):
         for species in self.fixed_h_species:
             h_r_matrix[species] = self.fixed_h_r_matrix[species]
