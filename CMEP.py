@@ -1,6 +1,6 @@
 # Based on the Classical Map Effective Potential model for plasmas
 
-from hnc_pseudopotential import  HNC_solver
+from hnc_Ng import  HNC_solver
 from qsps import *
 from constants import *
 

@@ -296,7 +296,13 @@ class HNC_solver():
     def update_fixed_h(self, h_r_matrix):
         for species in self.fixed_h_species:
             h_r_matrix[species] = self.fixed_h_r_matrix[species]
+        return h_r_matrix
 
+    def update_βu(self, βu_s_r_matrix, α=1):
+        for species in self.fixed_h_species:
+            self.βu_s_r_matrix[species] = α*βu_s_r_matrix[species] + (1-α)*self.βu_s_r_matrix[species]
+            self.βu_s_k_matrix[species] = self.FT_r_2_k(βu_s_r_matrix[species])
+    
     def updater(self,old, new, alpha0 = 0.1):
         max_change = np.max(new/old)
         alpha  = np.min([alpha0,  alpha0/max_change])
@@ -356,7 +362,6 @@ class HNC_solver():
         self.γs_k_matrix  = γs_k_matrix
         self.γs_r_matrix  = γs_r_matrix
         self.βω_r_matrix  = βω_r_matrix
-        self.h_r_matrix   = h_r_matrix
         self.h_r_matrix   = h_r_matrix
         self.h_k_matrix   = h_k_matrix
     
@@ -508,14 +513,39 @@ class HNC_solver():
 
         return P_id + P_ex
 
+    def guess_h_k_matrix(self, h_k_matrix):
+        h_r_matrix = self.FT_k_2_r_matrix(h_k_matrix)
+        h_r_matrix = np.where(h_r_matrix<=-1, -1 + 1e-6, h_r_matrix)
+        if self.fixed_h_species is not None:
+            h_r_matrix = self.update_fixed_h(h_r_matrix)
+            
+        c_s_k_matrix = self.invert_SVT(h_k_matrix, self.c_s_k_matrix)
+        γs_k_matrix = h_k_matrix - c_s_k_matrix
+        γs_r_matrix = self.FT_k_2_r_matrix(γs_k_matrix) # γ_k        -> γ_r   (FT)     
+        
+        if self.fixed_h_species is not None:
+            βu_s_r_matrix = γs_r_matrix - np.log(h_r_matrix + 1)
+            self.update_βu(βu_s_r_matrix)
+
+        h_r_matrix = -1 + np.exp(γs_r_matrix - self.βu_s_r_matrix)
+        h_r_matrix = np.where(h_r_matrix>self.h_max, self.h_max, h_r_matrix)
+        h_k_matrix = self.FT_r_2_k_matrix(h_r_matrix)
+        return h_k_matrix
+
+
+
     def guess_c_s_k_matrix(self, c_s_k_matrix):
         γs_k_matrix = self.get_γs_k_matrix(c_s_k_matrix)                           # 1. c_k, u_l_k -> γ_k   (Definition)
 
         γs_r_matrix = self.FT_k_2_r_matrix(γs_k_matrix) # γ_k        -> γ_r   (FT)     
         h_r_matrix = -1 + np.exp(γs_r_matrix - self.βu_s_r_matrix) # 2. γ_r,u_s_r  -> h_r   (HNC)   
-        h_r_matrix = self.update_fixed_h(h_r_matrix)
-        
         h_r_matrix = np.where(h_r_matrix>self.h_max, self.h_max, h_r_matrix)
+        
+        if self.fixed_h_species is not None:
+            h_r_matrix = self.update_fixed_h(h_r_matrix)
+            βu_s_r_matrix = γs_r_matrix - np.log(h_r_matrix + 1)
+            self.update_βu(βu_s_r_matrix)
+
         h_k_matrix = self.FT_r_2_k_matrix(h_r_matrix)
         # Plug into HNC equation
 
@@ -609,9 +639,9 @@ class HNC_solver():
                 guess_c_s_k_matrix = self.guess_c_s_k_matrix(self.c_s_k_matrix)
                 self.c_s_k_matrix = self.Picard_c_s_k(self.c_s_k_matrix, guess_c_s_k_matrix, alpha=alpha_Picard )
             elif iteration == iters_to_wait:
+                print("Starting Ng loop, using best index so far: ", best_run_index)
                 best_run_index = np.argmin(self.tot_err_list)
                 self.c_s_k_matrix = self.c_s_k_matrix_list[best_run_index]
-                print("Starting Ng loop, using best index so far: ", best_run_index)
                 self.h_r_matrix_list = self.h_r_matrix_list[:best_run_index]
                 self.c_s_k_matrix_list = self.c_s_k_matrix_list[:best_run_index]
                 self.u_ex_list = self.u_ex_list[:best_run_index]
@@ -673,7 +703,7 @@ class HNC_solver():
                 converged = 0
 
             iteration += 1
-        best_run_index = np.argmin(self.tot_err_list)
+        best_run_index = np.argmin(self.tot_err_list[1:])+1
         self.c_s_k_matrix = self.c_s_k_matrix_list[best_run_index]# + self.βu_l_k_matrix
         self.set_all_matrices_from_csk(self.c_s_k_matrix)
         self.final_Picard_err = self.tot_err_list[best_run_index]
@@ -1054,8 +1084,8 @@ if __name__ == "__main__":
     self.HNC_solve()
     # print(self.c_r_matrix)
 
-    h_r_matrix = self.h_r_matrix
-    c_r_matrix = self.c_r_matrix
+    h_r_matrix = self.h_r_matrix.copy()
+    c_r_matrix = self.c_r_matrix.copy()
 
     # To get the radial distribution function g(r), you can add 1 to the h_r_matrix:
     g_r_matrix = h_r_matrix + 1

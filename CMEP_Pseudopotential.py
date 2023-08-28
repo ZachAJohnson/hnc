@@ -1,6 +1,6 @@
 # Based on the Classical Map Effective Potential model for plasmas
 
-from hnc_Ng import  HNC_solver
+from hnc_pseudopotential import  HNC_solver
 from qsps import *
 from constants import *
 
@@ -26,6 +26,7 @@ class CMEP_Atom():
 		self.root_options.update(root_options)
 
 		self.Z, self.A, self.Zbar = Z, A, Zbar
+
 		self.ni_cc = ni_cc
 		self.Te = Te_in_eV*eV_to_AU
 		self.Ti = Ti_in_eV*eV_to_AU
@@ -37,7 +38,8 @@ class CMEP_Atom():
 			self.Zbar = self.ThomasFermiZbar(self.Z, self.ni_cc, Te_in_eV)
 			print("Te: {0:.3f} eV, Zbar = {1:.3f}".format(Te_in_eV, self.Zbar))
 
-		self.names = ["ion", "electron"] 
+		self.names = ["ion", "free","bound"] 
+		self.hnc_options['names']=self.names
 		self.Picard_max_err = Picard_max_err
 		self.qsp = self.make_qsp(self.ni_cc, self.Zbar, self.Ti, self.Te)
 		self.hnc = self.make_hnc(self.qsp, self.Zbar)
@@ -90,8 +92,11 @@ class CMEP_Atom():
 		else:
 			βvei = qsp.βvei(r_array)
 		
-		βu_r_matrix = np.array([[qsp.βvii(r_array), βvei],
-		                      [βvei, qsp.βvee(r_array)]])
+		βu_r_matrix = np.array([[qsp.βvii(r_array), βvei, βvei ],
+		                        [βvei, qsp.βvee(r_array), qsp.βvee(r_array)],
+		                        [βvei, qsp.βvee(r_array), qsp.βvee(r_array)]])
+
+
 		if add_bridge:
 			if bridge=='ocp':
 				βu_r_matrix[0,0] = βu_r_matrix[0,0] - HNC_solver.Bridge_function_OCP(r_array, qsp.Γii)
@@ -104,14 +109,18 @@ class CMEP_Atom():
 	def make_qsp(self, ni_cc, Zbar, Ti, Te):
 		n_in_AU = ni_cc*1e6 *aB**3
 		ri = QSP_HNC.rs_from_n(n_in_AU)
-		qsp = QSP_HNC(self.Z, self.A, Zbar, Te, Ti, ri, Zbar*n_in_AU, **self.qsp_options)
+		ne_in_AU = self.Z*n_in_AU
+		qsp = QSP_HNC(self.Z, self.A, self.Z, Te, Ti, ri, ne_in_AU, **self.qsp_options) # Use full Z, same for bound and free
 		return qsp
 
 	def make_hnc(self, qsp, Zbar):
-		densities_in_rs = np.array([  3/(4*π), Zbar * 3/(4*π) ])
-		temperatures_AU = np.array([qsp.Ti, qsp.Te_c])
-		masses= np.array([qsp.m_i, m_e])
-		hnc = HNC_solver(2, qsp.Γ_matrix, densities_in_rs, temperatures_AU, masses, **self.hnc_options)
+		densities_in_rs = np.array([  3/(4*π), Zbar * 3/(4*π), (self.Z-Zbar)*3/(4*π) ])
+		temperatures_AU = np.array([qsp.Ti, qsp.Te_c, qsp.Te_c ])
+		masses= np.array([qsp.m_i, m_e, m_e])
+		Γ_matrix = np.array([[ qsp.Γii, qsp.Γei , qsp.Γei],
+					   [ qsp.Γei, qsp.Γee , qsp.Γee],
+					   [ qsp.Γei, qsp.Γee , qsp.Γee]])
+		hnc = HNC_solver(3, Γ_matrix, densities_in_rs, temperatures_AU, masses, **self.hnc_options)
 		self.make_βu_matrix_from_qsp(hnc, qsp)
 		return hnc
 

@@ -100,8 +100,12 @@ class Two_Electron_Plasma():
 			βvei = qsp.βvei(r_array)
 		
 		βu_r_matrix = np.array([[qsp.βvii(r_array), qsp.βvei(r_array), qsp.βvei(r_array) ],
-		                        [qsp.βvei(r_array), qsp.βv_Deutsch(qsp.Γee, r_array, qsp.Λee) + self.βP_uu, qsp.βvei(r_array)],
-		                        [qsp.βvei(r_array), qsp.βvei(r_array), qsp.βv_Deutsch(qsp.Γee, r_array, qsp.Λee) + self.βP_uu]])
+		                        [qsp.βvei(r_array), qsp.βv_Deutsch(qsp.Γee, r_array, qsp.Λee) + self.βP_uu, qsp.βvee(r_array)],
+		                        [qsp.βvei(r_array), qsp.βvee(r_array), qsp.βv_Deutsch(qsp.Γee, r_array, qsp.Λee) + self.βP_uu]])
+
+		# βu_r_matrix = np.array([[qsp.βvii(r_array), qsp.βvei(r_array), qsp.βvei(r_array) ],
+		#                         [qsp.βvei(r_array), qsp.βvee(r_array), qsp.βvee(r_array) ],
+		#                         [qsp.βvei(r_array), qsp.βvee(r_array), qsp.βvee(r_array) ]])
 
 		print("Warning, setting qsp based on self βP")
 		if add_bridge:
