@@ -3,6 +3,7 @@
 from hnc_Ng import  HNC_solver
 from qsps import *
 from constants import *
+from misc import find_η
 
 from atomic_forces.atomOFDFT.python.physics import ThomasFermi
 from scipy.optimize import root
@@ -139,19 +140,9 @@ class Two_Electron_Plasma():
 		self.onlyion_hnc.c_s_k_matrix *= 0
 		self.onlyion_hnc.HNC_solve(**self.hnc_solve_options)
 
-	def find_η(self, Te, ne):
-	    """
-	    Gets chemical potential in [AU] that gives density ne at temperature Te
-	    """
-	    f_to_min = lambda η: ThomasFermi.n_TF(Te, η)-ne # η = βμ in ideal gas, no potential case
-	    
-	    root_and_info = root(f_to_min, 0.4,tol=1e-4)
-
-	    η = root_and_info['x'][0]
-	    return η
 
 	def get_η(self):
-		self.η = self.find_η(self.Te, self.qsp.ne)
+		self.η = find_η(self.Te, self.qsp.ne)
 
 	def h_uu_ID_of_r(self, ne, T, r, η):
 		sin_arg = np.sqrt(2*T*m_e)*r

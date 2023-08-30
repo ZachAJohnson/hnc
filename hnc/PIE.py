@@ -5,14 +5,13 @@ from .hnc import  Hypernetted_Chain_Solver as HNC_solver
 from .qsps import Quantum_Statistical_Potentials as QSPs
 
 from .constants import *
-from .misc import rs_from_n, n_from_rs
-
+from .misc import rs_from_n, n_from_rs, find_η
 
 from scipy.interpolate import LinearNDInterpolator
 
 
 class Plasma_of_Ions_and_Electrons():
-	def __init__(self,Z, A, ni_cc, Ti_in_eV, Te_in_eV, Zbar=None, single_species_guess=False, Picard_max_err = 1,
+	def __init__(self,Z, A, ni_cc, Ti_in_eV, Te_in_eV, Zbar=None, find_βuee=False, single_species_guess=False, Picard_max_err = 1,
 		βu_options = {}, hnc_options= {}, qsp_options= {}, hnc_solve_options={}, root_options = {}):
 
 		self.hnc_options = { 'N_bins' :500, 'R_max':5, 'oz_method':'svt'}
@@ -44,7 +43,13 @@ class Plasma_of_Ions_and_Electrons():
 		self.Picard_max_err = Picard_max_err
 		self.qsp = self.make_qsp(self.ni_cc, self.Zbar, self.Ti, self.Te)
 		self.hnc = self.make_hnc(self.qsp, self.Zbar)
-		# self.run_hnc(self.hnc, self.qsp)
+
+		#Now make Pauli potential directly or not
+		self.find_βuee = ﬁnd_βuee
+		if find_βuee==True:
+			self.get_βPauli()
+		
+		self.make_βu_matrix_from_qsp(self.hnc, self.qsp)
 	
 	@staticmethod
 	def ThomasFermiZbar( Z, num_density, T):
@@ -93,8 +98,14 @@ class Plasma_of_Ions_and_Electrons():
 		else:
 			βvei = qsp.βvei(r_array)
 		
-		βu_r_matrix = np.array([[qsp.βvii(r_array), βvei],
-		                      [βvei, qsp.βvee(r_array)]])
+		if self.find_βuee==True:
+			βvee = self.βP_ee + qsp.βvee(r_array)-qsp.βv_Pauli(r_array, qsp.Λee)
+		else:
+			βvee = qsp.βvee(r_array)
+		
+		βvii = qsp.βvii(r_array)
+		βu_r_matrix = np.array([[βvii, βvei],
+		                        [βvei, βvee]])
 		if add_bridge:
 			if bridge=='ocp':
 				βu_r_matrix[0,0] = βu_r_matrix[0,0] - HNC_solver.Bridge_function_OCP(r_array, qsp.Γii)
@@ -115,9 +126,44 @@ class Plasma_of_Ions_and_Electrons():
 		temperatures_AU = np.array([qsp.Ti, qsp.Te_c])
 		masses= np.array([qsp.m_i, m_e])
 		hnc = HNC_solver(2, qsp.Γ_matrix, densities_in_rs, temperatures_AU, masses, **self.hnc_options)
-		self.make_βu_matrix_from_qsp(hnc, qsp)
 		return hnc
+	
+	# Functions for making Pauli potential
+	# See "Simple classical mapping of the spin-polarized quantum electron gas: distribution functions and local-field corrections" (1999)
+	# Dharma-Wardana and Perrot
+	# https://doi.org/10.1103/physrevlett.84.959
+	def get_η(self):
+		self.η = find_η(self.Te, self.qsp.ne)
 
+	def h_uu_ID_of_r(self, ne, T, r, η):
+		sin_arg = np.sqrt(2*T*m_e)*r
+		t_max = 5*η
+
+		t = np.linspace(0,t_max, num=10000) 
+		dt = t[1]-t[0]
+		κ = 3*(2*T*m_e) / (self.qsp.k_F**3 * r)  * np.sum(dt* t*np.sin(sin_arg*t) /(1+np.exp(t**2-η) )  )
+		h_uu_ID = -κ**2
+		return h_uu_ID
+
+	def get_hee_ID(self):
+		self.get_η()
+		self.h_uu_ID = np.array([self.h_uu_ID_of_r(self.qsp.ne, self.Te, r , self.η) for r in self.hnc.r_array])
+		self.h_ee_ID = self.h_uu_ID/2 # average of completely uncorrelated anti-spins (h=0), and this same-spin h
+
+	def get_βPauli(self): #Pauli potential
+		self.get_hee_ID()
+		h_r = self.h_ee_ID.copy() 
+		h_k = self.hnc.FT_r_2_k(h_r)
+
+		I_plus_h_rho_inverse = 1/(1 + h_k*self.hnc.rho[0])
+
+		c_k = I_plus_h_rho_inverse * h_k
+		c_r = self.hnc.FT_k_2_r(c_k)
+
+		# Approximate with HNC
+		self.βP_ee = h_r - c_r - np.log(h_r+1)
+	
+	# Solving HNC system of equations
 	def run_onlyion_hnc(self):
 		self.onlyion_hnc = HNC_solver(1, self.qsp.Γ_matrix[:1,:1], np.array([3/(4*π)]), np.array([self.qsp.Ti]), np.array([self.qsp.m_i]), **self.hnc_options)
 		self.onlyion_hnc.c_s_k_matrix *= 0
