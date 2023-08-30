@@ -1,14 +1,17 @@
 # Based on the Classical Map Effective Potential model for plasmas
+import numpy as np
 
-from hnc_Ng import  HNC_solver
-from qsps import *
-from constants import *
+from .hnc import  Hypernetted_Chain_Solver as HNC_solver
+from .qsps import Quantum_Statistical_Potentials as QSPs
+
+from .constants import *
+from .misc import rs_from_n, n_from_rs
 
 
 from scipy.interpolate import LinearNDInterpolator
 
 
-class CMEP_Atom():
+class Plasma_of_Ions_and_Electrons():
 	def __init__(self,Z, A, ni_cc, Ti_in_eV, Te_in_eV, Zbar=None, single_species_guess=False, Picard_max_err = 1,
 		βu_options = {}, hnc_options= {}, qsp_options= {}, hnc_solve_options={}, root_options = {}):
 
@@ -103,8 +106,8 @@ class CMEP_Atom():
 
 	def make_qsp(self, ni_cc, Zbar, Ti, Te):
 		n_in_AU = ni_cc*1e6 *aB**3
-		ri = QSP_HNC.rs_from_n(n_in_AU)
-		qsp = QSP_HNC(self.Z, self.A, Zbar, Te, Ti, ri, Zbar*n_in_AU, **self.qsp_options)
+		ri = rs_from_n(n_in_AU)
+		qsp = QSPs(self.Z, self.A, Zbar, Te, Ti, ri, Zbar*n_in_AU, **self.qsp_options)
 		return qsp
 
 	def make_hnc(self, qsp, Zbar):

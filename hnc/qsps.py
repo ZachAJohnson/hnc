@@ -9,9 +9,13 @@ from pandas import read_csv
 from scipy.special import erfc
 
 # Build Components for QSP's
-from constants import *
+from .constants import *
+from .misc import rs_from_n, n_from_rs
 
-class QSP_HNC():
+class Quantum_Statistical_Potentials():
+    """
+    Class defining classical mapping potentials for electron-ion systems where the electrons are partially degenerate.  
+    """
 
 
     def __init__(self, Z, A, Zstar, Te, Ti, ri, ne, which_Tij='thermal', r_c = 3/5, verbose= False):
@@ -31,7 +35,7 @@ class QSP_HNC():
         # [AU]
 
         self.ri = ri
-        self.ni = self.n_from_rs(ri)
+        self.ni = n_from_rs(ri)
         self.m_i = m_p*self.A
         
         # Actual Temperatures and inverse temperatures
@@ -44,7 +48,7 @@ class QSP_HNC():
         self.βie = 1/self.Tie
 
         self.ne = ne#self.Zstar*self.ni
-        self.re = self.rs_from_n(self.ne)
+        self.re = rs_from_n(self.ne)
 
         self.E_F = 1/(2*m_e) * (3*π**2 * self.ne)**(2/3)
         self.v_F = np.sqrt(2*self.E_F/m_e)
@@ -98,14 +102,6 @@ class QSP_HNC():
     def make_Te(Te, Tq):
         Te_c  = np.sqrt(Tq**2 + Te**2)
         return Te_c
-
-    @staticmethod
-    def n_from_rs( rs):
-        return 1/(4/3*π*rs**3)
-
-    @staticmethod
-    def rs_from_n(n):
-        return (4/3*π*n)**(-1/3)
 
     def get_κ(self):
         kTF = np.sqrt(  4*π*self.ne  /self.Te_c  )
