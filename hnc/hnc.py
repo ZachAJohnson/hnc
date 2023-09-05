@@ -480,17 +480,23 @@ class Hypernetted_Chain_Solver():
         P_ex = np.sum(P_ex_matrix)
         return P_ex
     
-    def total_energy_density(self):
-
-        u_ex = self.excess_energy_density()
+    def ideal_pressure(self):
+        P_id = np.sum(self.rho*self.Temp_list)
+        return P_id
+    
+    def ideal_energy_density(self):
         u_id = 3/2 * np.sum(self.rho*self.Temp_list)
+        return u_id 
+
+    def total_energy_density(self):
+        u_ex = self.excess_energy_density()
+        u_id = self.ideal_energy_density()
 
         return u_id + u_ex
 
     def total_pressure(self):
-
         P_ex = self.excess_pressure()
-        P_id = np.sum(self.rho*self.Temp_list)
+        P_id = self.ideal_pressure()
 
         return P_id + P_ex
 
