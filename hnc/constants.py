@@ -3,7 +3,7 @@ from numpy import pi
 π = pi
 
 m_e = 1
-m_p = 1833.274
+m_p = 1833.274 # In AU
 aB = 5.29177210903e-11 # Bohr radius in m
 k_B = 1.380649e-23 # SI J/K
 
@@ -15,6 +15,10 @@ Kelvin_to_AU = 8.61732814974493e-5*eV_to_AU #Similarly, 1 Kelvin = 3.167e-6... i
 J_to_erg = 1e7
 AU_to_J = 4.359744e-18
 AU_to_erg = AU_to_J*J_to_erg
+AU_to_Pa = AU_to_J / aB**3 
+AU_to_bar = AU_to_J / aB**3 /1e5 
+AU_to_invcc = 1/aB**3/1e6
+AU_to_g  = 9.1093837e-28 
 
 cm_to_AU = 1e-2/aB
 
