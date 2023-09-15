@@ -1,0 +1,12 @@
+# Equation of state of metallic hydrogen from coupled electron-ion Monte Carlo simulations
+# Miguel A. Morales,1,* Carlo Pierleoni,2,† and D. M. Ceperley3,‡
+# http://dx.doi.org/10.1103/PhysRevE.81.021202
+#Hydrogen EOS data. E, P used are CEIMC
+T[K]    ρgpercc   rs    E[AU]     P[GPa]  
+2000    0.983     1.40  -0.5117   213
+3000    0.983     1.40  -0.5057   220
+4000    0.983     1.40  -0.4993   232
+6000    0.983     1.40  -0.4869   256
+8000    0.983     1.40  -0.4767   275
+10000   0.983     1.40  -0.4674   295
+

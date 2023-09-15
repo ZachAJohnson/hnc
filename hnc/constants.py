@@ -19,6 +19,8 @@ AU_to_Pa = AU_to_J / aB**3
 AU_to_bar = AU_to_J / aB**3 /1e5 
 AU_to_invcc = 1/aB**3/1e6
 AU_to_g  = 9.1093837e-28 
+AU_to_s  = 2.4188843265e-17
+AU_to_kg = 9.1093837e-31
 
 cm_to_AU = 1e-2/aB
 
