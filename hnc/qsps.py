@@ -56,9 +56,9 @@ class Quantum_Statistical_Potentials():
         self.θ   = self.Te/self.E_F
 
         #Construct effective electron temperatures. https://journals-aps-org.proxy.lib.umich.edu/prl/pdf/10.1103/PhysRevLett.84.959
-        self.Tq  = 2/5*self.E_F #EF
+        # self.Tq  = 2/5*self.E_F #EF
         # self.Tq  = self.E_F #EF
-        # self.Tq  = self.E_F/(1.594 - 0.3160*np.sqrt(self.re) + 0.0240*self.re) #DMC
+        self.Tq  = self.E_F/(1.594 - 0.3160*np.sqrt(self.re) + 0.0240*self.re) #DMC
         # self.Tq  = self.E_F/(1.3251 - 0.1779*np.sqrt(self.re) + 0.0*self.re) #VMC
         self.Te_c  = self.make_Te(self.Te, self.Tq)
 

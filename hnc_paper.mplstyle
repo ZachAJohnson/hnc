@@ -1,0 +1,40 @@
+#fig
+figure.figsize: 8,6
+figure.dpi: 200
+
+#ax
+axes.titlesize : 30
+axes.labelsize : 30
+axes.formatter.use_mathtext: True
+axes.labelweight:   bold  # weight of the x and y labels
+axes.labelcolor:    black
+axes.linewidth: 4
+
+#lines
+lines.linewidth : 4
+lines.markersize : 4
+
+#ticks
+xtick.labelsize : 25
+ytick.labelsize : 25
+xtick.top: True
+ytick.right: True
+
+xtick.major.size: 10
+xtick.major.width: 2
+ytick.major.size: 10
+ytick.major.width: 2
+
+xtick.direction: out
+ytick.direction: out
+
+#legend
+legend.loc: upper right
+legend.fontsize: 20
+
+#font
+font.family: serif
+font.serif: Computer Modern Roman
+font.weight: bold
+
+text.latex.preamble = r'\boldmath'
