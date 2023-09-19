@@ -1,5 +1,7 @@
 # Based on the Classical Map Effective Potential model for plasmas
 import numpy as np
+from scipy.interpolate import interp1d
+from scipy.integrate import quad
 
 from .hnc import  Hypernetted_Chain_Solver as HNC_solver
 from .qsps import Quantum_Statistical_Potentials as QSPs
@@ -56,10 +58,10 @@ class Plasma_of_Ions_and_Electrons():
 		"""
 		Finite Temperature Thomas Fermi Charge State using 
 		R.M. More, "Pressure Ionization, Resonances, and the
-		Continuity of Bound and Free States", Adv. in Atomic 
+		Continuity of Bound and Free States", Adv. in selfic 
 		Mol. Phys., Vol. 21, p. 332 (Table IV).
 
-		Z = atomic number
+		Z = selfic number
 		num_density = number density (1/cc)
 		T = temperature (eV)
 		"""
@@ -94,7 +96,7 @@ class Plasma_of_Ions_and_Electrons():
 		pseudopotential, add_bridge, bridge = self.βu_options[ 'pseudopotential' ], self.βu_options['add_bridge'], self.βu_options['bridge']
 		r_array = hnc.r_array
 		if pseudopotential==True:
-			βvei = qsp.βvei_atomic(r_array)
+			βvei = qsp.βvei_selfic(r_array)
 		else:
 			βvei = qsp.βvei(r_array)
 		
@@ -149,7 +151,8 @@ class Plasma_of_Ions_and_Electrons():
 		self.get_η()
 		self.h_uu_ID = np.array([self.h_uu_ID_of_r(self.qsp.ne, self.Te, r , self.η) for r in self.hnc.r_array])
 		self.h_ee_ID = self.h_uu_ID/2 # average of completely uncorrelated anti-spins (h=0), and this same-spin h
-
+		
+		
 	def get_βPauli(self): #Pauli potential
 		self.get_hee_ID()
 		h_r = self.h_ee_ID.copy() 
@@ -163,12 +166,64 @@ class Plasma_of_Ions_and_Electrons():
 		# Approximate with HNC
 		self.βP_ee = h_r - c_r - np.log(h_r+1)
 	
-	# Solving HNC system of equations
-	def run_onlyion_hnc(self):
-		self.onlyion_hnc = HNC_solver(1, self.qsp.Γ_matrix[:1,:1], np.array([3/(4*π)]), np.array([self.qsp.Ti]), np.array([self.qsp.m_i]), **self.hnc_options)
-		self.onlyion_hnc.c_s_k_matrix *= 0
-		self.onlyion_hnc.HNC_solve(**self.hnc_solve_options)
+	def get_βPauli(self):
+		# Define HNC purely for FT
+		Nbins = 1000
+		dense_hnc = HNC_solver(2, self.qsp.Γ_matrix, np.array([1,1]), np.array([1,1]), np.array([1,1]), N_bins=Nbins, R_max=100)
 
+		# Chemical potential
+		η = find_η(self.qsp.Te, self.qsp.ne )
+
+		#Explict method
+		def h_of_r_explicit(r):
+			sin_arg = np.sqrt(2*self.qsp.Te*m_e)*r
+			t_max = 10*η
+			integrand = lambda t: t*np.sin(sin_arg*t)/(1+np.exp(t**2-η))
+			κ = 3*(2*self.qsp.Te*m_e) / (self.qsp.k_F**3 * r) *quad(integrand, 0, t_max)[0]
+			h = -0.5*κ**2
+			return h
+		h_ee_explicit = np.array([h_of_r_explicit(r) for r in dense_hnc.r_array])
+		print(h_ee_explicit[-10:])
+		# DST method
+		f_of_k = 1/(  1+np.exp((dense_hnc.k_array/self.qsp.ri)**2/(2*m_e*self.qsp.Te) - η) )
+		h_ee_dst = - 0.5*self.qsp.ri**-6*dense_hnc.FT_k_2_r(f_of_k)**2/(0.5*self.qsp.ne)**2 
+		print(h_ee_dst[-10:])
+		print(np.linalg.norm(h_ee_dst-h_ee_explicit)/np.sqrt(Nbins))
+		# Pick method and make βP
+		h_r = h_ee_dst 
+		h_k = dense_hnc.FT_r_2_k(h_r)
+		I_plus_h_rho_inverse = 1/(1 + h_k*self.hnc.rho[0])
+
+		c_k = I_plus_h_rho_inverse * h_k
+		c_r = dense_hnc.FT_k_2_r(c_k)
+
+		# Approximate with HNC
+		βP_ee = h_r - c_r - np.log(h_r+1)
+
+		self.βP_ee = interp1d(dense_hnc.r_array, βP_ee, kind='linear', bounds_error=False, fill_value = (βP_ee[0], 0) )(self.hnc.r_array)
+
+
+
+
+	# Solving HNC system of equations
+	def run_ocp_hnc(self):
+		self.ocp_hnc = HNC_solver(1, self.qsp.Γ_matrix[:1,:1], np.array([3/(4*π)]), np.array([self.qsp.Ti]), np.array([self.qsp.m_i]), **self.hnc_options)
+		self.ocp_hnc.c_s_k_matrix *= 0
+		self.ocp_hnc.HNC_solve(**self.hnc_solve_options)
+
+	def run_jellium_hnc(self):
+		self.jellium_hnc = HNC_solver(1, self.qsp.Γ_matrix[-1:,-1:], np.array([self.Zbar*3/(4*π)]), np.array([self.qsp.Te_c]), np.array([m_e]), **self.hnc_options)
+		self.jellium_hnc.c_s_k_matrix *= 0
+
+		r_array = self.jellium_hnc.r_array
+		if self.find_βuee==True:
+			βvee = self.βP_ee + self.qsp.βvee(r_array)-self.qsp.βv_Pauli(r_array, self.qsp.Λee)
+		else:
+			βvee = self.qsp.βvee(r_array)
+			
+		self.jellium_hnc.set_βu_matrix(np.array([[  βvee  ]]))
+		
+		self.jellium_hnc.HNC_solve(**self.hnc_solve_options)
 
 	def run_hnc(self, hnc=None, qsp=None, c_s_k_guess=None):
 		if hnc==None and qsp==None:
@@ -242,7 +297,7 @@ class Plasma_of_Ions_and_Electrons():
 	# 	return U + P*Vol_AU
 
 	def make_nT_table(self, ε_table=0.01, N_table=2):
-		self.mini_atom_table = np.zeros((N_table,N_table)).tolist()
+		self.mini_self_table = np.zeros((N_table,N_table)).tolist()
 		self.T_table = np.zeros((N_table,N_table))
 		self.u_table = np.zeros((N_table,N_table))
 		self.Ueff_table = np.zeros((N_table,N_table))
@@ -263,7 +318,7 @@ class Plasma_of_Ions_and_Electrons():
 				c_s_k_guess = temp_ratio[:,:,np.newaxis] * self.hnc.c_s_k_matrix.copy()
 				self.run_hnc(tmp_hnc, tmp_qsp, c_s_k_guess = c_s_k_guess)
 
-				self.mini_atom_table[i][j] = tmp_hnc
+				self.mini_self_table[i][j] = tmp_hnc
 				
 				self.u_table[i,j] = tmp_hnc.total_energy_density()/self.qsp.ri**3 
 				self.Heff_table[i,j]  = tmp_hnc.Heff
@@ -318,7 +373,7 @@ class Plasma_of_Ions_and_Electrons():
 
 
 	def make_TiTe_table(self, ε_table=0.01, N_table=2, Zbar_fixed=False):
-		self.mini_atom_table = np.zeros((N_table,N_table)).tolist()
+		self.mini_self_table = np.zeros((N_table,N_table)).tolist()
 		self.Te_table = np.zeros((N_table,N_table))
 		self.Ti_table = np.zeros((N_table,N_table))
 		self.u_table = np.zeros((N_table,N_table))
@@ -342,7 +397,7 @@ class Plasma_of_Ions_and_Electrons():
 				c_s_k_guess = temp_ratio[:,:,np.newaxis] * self.hnc.c_s_k_matrix.copy()
 				self.run_hnc(tmp_hnc, tmp_qsp, c_s_k_guess = c_s_k_guess)
 
-				self.mini_atom_table[i][j] = tmp_hnc
+				self.mini_self_table[i][j] = tmp_hnc
 				
 				self.u_table[i,j]  = tmp_hnc.total_energy_density()/self.qsp.ri**3 
 				self.Te_table[i,j] = Te_j

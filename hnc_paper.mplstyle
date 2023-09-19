@@ -1,6 +1,6 @@
 #fig
 figure.figsize: 8,6
-figure.dpi: 200
+figure.dpi: 100
 
 #ax
 axes.titlesize : 30
