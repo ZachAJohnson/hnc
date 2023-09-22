@@ -1,7 +1,23 @@
 from scipy.optimize import root
-from atomic_forces.atomOFDFT.python.physics import ThomasFermi
+from atomic_forces.atomOFDFT.python.physics import ThomasFermi, FermiDirac
 
 from .constants import *
+
+def Fermi_Energy(ne):
+    E_F = 1/(2*m_e) * (3*π**2 * ne)**(2/3)
+    return E_F
+
+def Fermi_velocity(ne):
+    v_F = np.sqrt(2*Fermi_Energy(ne)/m_e)
+    return v_F
+
+def Fermi_wavenumber(ne):
+    k_F = Fermi_velocity(ne)*m_e
+    return k_F
+
+def Degeneracy_Parameter(Te, ne):
+    θ = Te/Fermi_Energy(ne)
+    return θ
 
 def n_from_rs( rs):
     """
@@ -25,3 +41,15 @@ def find_η(Te, ne):
 
     η = root_and_info['x'][0]
     return η
+
+def P_Ideal_Fermi_Gas(Te, ne):
+    """
+    Gets the noninteracting pressure in AU.
+    """
+    η = find_η(Te, ne)
+    Ithreehalf = FermiDirac.Ithreehalf(η)
+    P = Te*ne*Degeneracy_Parameter(Te, ne)**(3/2)*Ithreehalf
+    return P
+
+
+    

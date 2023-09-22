@@ -183,12 +183,11 @@ class Plasma_of_Ions_and_Electrons():
 			h = -0.5*κ**2
 			return h
 		h_ee_explicit = np.array([h_of_r_explicit(r) for r in dense_hnc.r_array])
-		print(h_ee_explicit[-10:])
+		
 		# DST method
 		f_of_k = 1/(  1+np.exp((dense_hnc.k_array/self.qsp.ri)**2/(2*m_e*self.qsp.Te) - η) )
 		h_ee_dst = - 0.5*self.qsp.ri**-6*dense_hnc.FT_k_2_r(f_of_k)**2/(0.5*self.qsp.ne)**2 
-		print(h_ee_dst[-10:])
-		print(np.linalg.norm(h_ee_dst-h_ee_explicit)/np.sqrt(Nbins))
+		
 		# Pick method and make βP
 		h_r = h_ee_dst 
 		h_k = dense_hnc.FT_r_2_k(h_r)
