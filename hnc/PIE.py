@@ -58,10 +58,10 @@ class Plasma_of_Ions_and_Electrons():
 		"""
 		Finite Temperature Thomas Fermi Charge State using 
 		R.M. More, "Pressure Ionization, Resonances, and the
-		Continuity of Bound and Free States", Adv. in selfic 
+		Continuity of Bound and Free States", Adv. in atomic 
 		Mol. Phys., Vol. 21, p. 332 (Table IV).
 
-		Z = selfic number
+		Z = atomic number
 		num_density = number density (1/cc)
 		T = temperature (eV)
 		"""
@@ -96,7 +96,7 @@ class Plasma_of_Ions_and_Electrons():
 		pseudopotential, add_bridge, bridge = self.βu_options[ 'pseudopotential' ], self.βu_options['add_bridge'], self.βu_options['bridge']
 		r_array = hnc.r_array
 		if pseudopotential==True:
-			βvei = qsp.βvei_selfic(r_array)
+			βvei = qsp.βvei_atomic(r_array)
 		else:
 			βvei = qsp.βvei(r_array)
 		
