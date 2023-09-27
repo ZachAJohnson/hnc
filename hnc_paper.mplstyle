@@ -8,11 +8,11 @@ axes.labelsize : 30
 axes.formatter.use_mathtext: True
 axes.labelweight:   bold  # weight of the x and y labels
 axes.labelcolor:    black
-axes.linewidth: 4
+axes.linewidth: 3
 
 #lines
-lines.linewidth : 4
-lines.markersize : 4
+lines.linewidth : 2
+lines.markersize : 3
 
 #ticks
 xtick.labelsize : 25

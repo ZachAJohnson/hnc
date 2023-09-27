@@ -21,7 +21,7 @@ class Plasma_of_Ions_and_Electrons():
 		self.qsp_options = {'r_c':0.6}
 		self.hnc_solve_options = {'alpha_method':'fixed', 'alpha_Picard': 0.5, 'tol':1e-8, 'alpha_Ng':0, 
                        'iters_to_wait':1e4, 'num_iterations':1e3, 'verbose':False}
-		self.root_options = {'method':'hybr', 'options': {'eps':1e-6,'maxfev':10000,'factor':100,'xtol':1e-8}}
+		self.root_options = {'method':'hybr', 'options': {'eps':1e-6,'maxfev':10000,'factor':100,'xtol':1e-12}}
 		
 		self.hnc_options.update(hnc_options)
 		self.βu_options.update(βu_options)
