@@ -58,10 +58,10 @@ class Quantum_Statistical_Potentials():
         #Construct effective electron temperatures. https://journals-aps-org.proxy.lib.umich.edu/prl/pdf/10.1103/PhysRevLett.84.959
         # self.Tq  = 2/5*self.E_F #EF
         # self.Tq  = self.E_F #EF
-        self.Tq  = self.E_F/(1.594 - 0.3160*np.sqrt(self.re) + 0.0240*self.re) #DMC
+        # self.Tq  = self.E_F/(1.594 - 0.3160*np.sqrt(self.re) + 0.0240*self.re) #DMC
         # self.Tq  = self.E_F/(1.3251 - 0.1779*np.sqrt(self.re) + 0.0*self.re) #VMC
-        self.Te_c  = self.make_Te(self.Te, self.Tq)
-        # self.Te_c = P_Ideal_Fermi_Gas(self.Te, self.ne)/self.ne # Matches free Fermi gas pressure exactly
+        # self.Te_c  = self.make_Te(self.Te, self.Tq)
+        self.Te_c = P_Ideal_Fermi_Gas(self.Te, self.ne)/self.ne # Matches free Fermi gas pressure exactly
 
         self.lambda_TF = np.sqrt( self.Te / (4*π*self.ne)  )
 
@@ -118,11 +118,11 @@ class Quantum_Statistical_Potentials():
         Tie = μ_ei * (Te/m_e + Ti/self.m_i) #thermal velocity defined Tei
         return Tie
 
+    # Actual QSP's 
     def βv_Deutsch(self, Γ, r, Λ):
         # return Γ/r* ( 1 -  np.exp(-np.sqrt(2)π*r/Λe) ) # for Sarkas Λ
         return Γ/r* ( 1 -  np.exp(-r/Λ) )
 
-    # Kelbg looks really weird??
     def βv_Kelbg(self, Γ,r, Λ):
         return Γ/r*( 1 - np.exp(-r**2/(Λ**2*2*π)) + r/Λ*erfc(r/Λ/np.sqrt(2*π)) )
         # return Γ/r*( 1 - np.exp(-2*π*r**2/Λe**2)+ np.sqrt(2)*π*r/Λe*erfc(np.sqrt(2*π)*r/Λe))
@@ -138,10 +138,10 @@ class Quantum_Statistical_Potentials():
     ######### Build Actual QSP's
 
     def βvee(self, r):
-        return self.βv_Deutsch(self.Γee,r, self.Λee) + self.βv_Pauli(r,self.Λee)
+        return self.βv_Kelbg(self.Γee,r, self.Λee) + self.βv_Pauli(r,self.Λee)
 
     def βvei(self, r):
-        return self.βv_Deutsch(self.Γei,r,self.Λei) #+ (Z-Zstar)*βv_Pauli(r)
+        return self.βv_Kelbg(self.Γei,r,self.Λei) #+ (Z-Zstar)*βv_Pauli(r)
 
     def βvei_atomic(self, r, core_height=0):
         r_c  = self.r_c #3/5 r_s in linear n_b(r) model
