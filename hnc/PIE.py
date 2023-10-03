@@ -29,6 +29,11 @@ class Plasma_of_Ions_and_Electrons():
 		self.hnc_solve_options.update(hnc_solve_options)
 		self.root_options.update(root_options)
 
+		# Warnings
+		if self.hnc_options['oz_method']=='svt' and self.qsp_options['which_Tij']=='geometric':
+			print("WARNING: Inconsistency. Cannot do SVT with geometric interspecies temperature.")
+
+		# Initialize class parameters 
 		self.Z, self.A, self.Zbar = Z, A, Zbar
 		self.ni_cc = ni_cc
 		self.Te = Te_in_eV*eV_to_AU
@@ -125,9 +130,9 @@ class Plasma_of_Ions_and_Electrons():
 
 	def make_hnc(self, qsp, Zbar):
 		densities_in_rs = np.array([  3/(4*π), Zbar * 3/(4*π) ])
-		temperatures_AU = np.array([qsp.Ti, qsp.Te_c])
+		temperature_matrix_AU = qsp.Tij
 		masses= np.array([qsp.m_i, m_e])
-		hnc = HNC_solver(2, qsp.Γ_matrix, densities_in_rs, temperatures_AU, masses, **self.hnc_options)
+		hnc = HNC_solver(2, qsp.Γ_matrix, densities_in_rs, temperature_matrix_AU, masses, **self.hnc_options)
 		return hnc
 	
 	# Functions for making Pauli potential

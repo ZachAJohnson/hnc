@@ -110,10 +110,10 @@ class Quantum_Statistical_Potentials():
         kTF = np.sqrt(  4*π*self.ne  /self.Te_c  )
         return kTF*self.ri
 
-    def Tei_geometric(self, Te, Ti):
+    def Tei_geometric(self, Te, Ti): # Returns geometric mean of two temperatures
         return np.sqrt(Te*Ti)
 
-    def Tei_thermal(self, Te, Ti):
+    def Tei_thermal(self, Te, Ti): # Averages thermal velocities. If Ti=0 or mi->infinity, Tei_thermal = Te
         μ_ei = self.m_i*m_e/(m_e+self.m_i) #reduced mass
         Tie = μ_ei * (Te/m_e + Ti/self.m_i) #thermal velocity defined Tei
         return Tie

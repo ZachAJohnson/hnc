@@ -15,11 +15,11 @@ from .constants import *
 
 
 class Hypernetted_Chain_Solver():
-    def __init__(self, N_species, Gamma, rho, temps, masses, dst_type=3, h_max=1e3, oz_method='standard',kappa = 1.0, kappa_multiscale = 1.0,  R_max=25.0, N_bins=512, names=None):
+    def __init__(self, N_species, Gamma, number_densities_in_rs, temperature_in_AU_matrix, masses, dst_type=3, h_max=1e3, oz_method='standard',kappa = 1.0, kappa_multiscale = 1.0,  R_max=25.0, N_bins=512, names=None):
         self.N_species = N_species
         self.Gamma = Gamma
-        self.rho = rho
-        self.Temp_list = temps
+        self.rho = number_densities_in_rs
+        self.Temp_matrix = temperature_in_AU_matrix #(self.mass_list[:,np.newaxis]*self.Temp_list[np.newaxis,:] + self.mass_list[np.newaxis,:]*self.Temp_list[:,np.newaxis])/(self.mass_list[:,np.newaxis] + self.mass_list[np.newaxis,:])
         self.mass_list = masses
         self.kappa = kappa
         self.kappa_multiscale = kappa_multiscale
@@ -28,7 +28,7 @@ class Hypernetted_Chain_Solver():
         self.dst_type = dst_type
         self.oz_method = oz_method
         self.h_max=h_max
-        self.Temp_matrix = (self.mass_list[:,np.newaxis]*self.Temp_list[np.newaxis,:] + self.mass_list[np.newaxis,:]*self.Temp_list[:,np.newaxis])/(self.mass_list[:,np.newaxis] + self.mass_list[np.newaxis,:])
+        self.Temp_list = np.diag(self.Temp_matrix)
         self.mass_matrix = (self.mass_list[:,np.newaxis]*self.mass_list[np.newaxis,:])/(self.mass_list[:,np.newaxis] + self.mass_list[np.newaxis,:])
 
         self.I = np.eye(N_species)
