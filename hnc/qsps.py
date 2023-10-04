@@ -119,13 +119,14 @@ class Quantum_Statistical_Potentials():
         return Tie
 
     # Actual QSP's 
-    def βv_Deutsch(self, Γ, r, Λ):
-        # return Γ/r* ( 1 -  np.exp(-np.sqrt(2)π*r/Λe) ) # for Sarkas Λ
-        return Γ/r* ( 1 -  np.exp(-r/Λ) )
+    def βv_Deutsch(self, Γ, r, Λ): # Checked exactly for Λ defined by Λ_ij = hbar/sqrt(  2 π T_ij μ_ij )
+        return Γ/r* ( 1 -  np.exp(-r/Λ) )   
 
-    def βv_Kelbg(self, Γ,r, Λ):
-        return Γ/r*( 1 - np.exp(-r**2/(Λ**2*2*π)) + r/Λ*erfc(r/Λ/np.sqrt(2*π)) )
-        # return Γ/r*( 1 - np.exp(-2*π*r**2/Λe**2)+ np.sqrt(2)*π*r/Λe*erfc(np.sqrt(2*π)*r/Λe))
+    def βv_Kelbg(self, Γ, r, Λ): # Checked exactly for Λ defined by Λ_ij = hbar/sqrt(  2 π T_ij μ_ij )
+        return Γ/r*( 1 - np.exp(-r**2/(π*Λ**2)) + r/Λ * erfc( r/(Λ*np.sqrt(π)) )  )
+
+    def βv_Improved_Kelbg(self, Γ, r, Λ, γ=1): # Checked exactly for Λ defined by Λ_ij = hbar/sqrt(  2 π T_ij μ_ij )
+        return Γ/r*( 1 - np.exp(-r**2/(π*Λ**2)) + r/(Λ*γ) * erfc( γ*r/(Λ*np.sqrt(π)) )  )
 
     def βv_Pauli(self, r, Λ):
         #Sarkas
@@ -141,7 +142,16 @@ class Quantum_Statistical_Potentials():
         return self.βv_Kelbg(self.Γee,r, self.Λee) + self.βv_Pauli(r,self.Λee)
 
     def βvei(self, r):
-        return self.βv_Kelbg(self.Γei,r,self.Λei) #+ (Z-Zstar)*βv_Pauli(r)
+        """
+        Using fit from Filinov et al 2004 PHYSICAL REVIEW E 70, 046411 (2004)
+        """
+        x1 = np.sqrt(8*π*self.Tie_c)
+        a_ep = 1.09
+
+        γep = (x1 + x1**2)/( 1 + a_ep*x1 + x1**2)
+        # SETTING γ fit to 1 !!
+        return self.βv_Improved_Kelbg(self.Γei, r, self.Λei, γ=γep ) 
+        # return self.βv_Deutsch(self.Γei, r, self.Λei)
 
     def βvei_atomic(self, r, core_height=0):
         r_c  = self.r_c #3/5 r_s in linear n_b(r) model
