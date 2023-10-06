@@ -472,6 +472,11 @@ class Hypernetted_Chain_Solver():
         P_id_matrix = np.diag(self.rho*self.Temp_list)
         return P_ex_matrix + P_id_matrix
 
+    def energy_density_matrix(self):
+        E_ex_matrix = self.excess_energy_density_matrix()
+        E_id_matrix = 3/2*np.diag(self.rho*self.Temp_list)
+        return E_ex_matrix + E_id_matrix
+
     def excess_energy_density(self):
         u_ex_matrix = self.excess_energy_density_matrix()
         u_ex = np.sum(u_ex_matrix)
@@ -1006,8 +1011,7 @@ class Hypernetted_Chain_Solver():
         axins.set_xlabel(r"$r/r_s$", fontsize=12)
         axins.set_ylabel(r"$g(r/r_s)$", fontsize=12)
         
-
-        plt.tight_layout()
+        # plt.tight_layout()
         plt.show()
     
     def plot_ck_all_species(self, data_to_compare=None, data_names=None, gmax=None):

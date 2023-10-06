@@ -48,8 +48,19 @@ def P_Ideal_Fermi_Gas(Te, ne):
     """
     η = find_η(Te, ne)
     Ithreehalf = FermiDirac.Ithreehalf(η)
-    P = Te*ne*Degeneracy_Parameter(Te, ne)**(3/2)*Ithreehalf
+    Θ = Degeneracy_Parameter(Te, ne)
+    P = Te * ne * Θ**(3/2) * Ithreehalf
     return P
+
+def E_Ideal_Fermi_Gas(Te, ne):
+    """
+    Gets the noninteracting pressure in AU.
+    """
+    η = find_η(Te, ne)
+    Ithreehalf = FermiDirac.Ithreehalf(η)
+    Θ = Degeneracy_Parameter(Te, ne)
+    E = 3/2 * Te * Θ**(3/2) * Ithreehalf
+    return E
 
 
     
