@@ -1,0 +1,30 @@
+# lines
+lines.linewidth : 2.2
+lines.markersize : 8
+
+# axes
+axes.spines.right : False
+axes.spines.top : False
+axes.labelsize : 16
+axes.grid : True
+#axes.prop_cycle : color=['#0AB34F', '#bf009f', '#00abc3', '#8e92c5', '#cc7014', '#e32851']
+axes.prop_cycle : cycler('color', ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'])
+
+# Fonts
+font.sans-serif : Arial, Tahoma, DejaVu Sans, Lucida Grande, Verdana
+font.size : 12
+
+# Grid
+grid.color : #636363
+grid.alpha : 0.12
+grid.linewidth : 0.7
+grid.linestyle : -
+
+# Legend
+legend.fancybox : True
+legend.framealpha : 0.6
+legend.fontsize : 10
+
+# Figure
+figure.figsize : 8, 4.9443
+figure.dpi : 100

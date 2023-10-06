@@ -3,6 +3,7 @@ from scipy import fftpack
 from scipy.optimize import newton, root
 
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
 from math import isnan
 
@@ -12,6 +13,7 @@ from scipy.optimize import minimize
 from scipy.linalg import solve_sylvester, solve_continuous_lyapunov
 
 from .constants import *
+
 
 
 class Hypernetted_Chain_Solver():
@@ -912,6 +914,34 @@ class Hypernetted_Chain_Solver():
         #axs[0,0].legend(fontsize=20)
         
         plt.show()
+    def plot_species_convergence_csk(self, n_slices=4):
+        fig, axs = plt.subplots(ncols=self.N_species, nrows=self.N_species, figsize=(10*self.N_species,6*self.N_species))
+        fig.suptitle("Direct Correlation Function Convergence Blue to Red" ,fontsize=20)
+
+        if type(axs) not in [list, np.ndarray, tuple]: 
+            axs=np.array([[axs]])
+
+        n = len(self.h_r_matrix_list)
+        indcs = [int(num)-1 for num in n/n_slices*np.arange(1,n_slices+1)]
+
+        for i in range(self.N_species):
+            for j in range(self.N_species):
+                for k in indcs:
+                    color = plt.cm.jet(k/n)
+                    axs[i,j].plot(self.k_array, self.c_s_k_matrix_list[k][i,j] , color=color ,label='iter: {0}'.format(int(k)))
+                    axs[i,j].set_title(self.name_matrix[i][j] + r", $\Gamma_{{ {0},{1} }}$ = {2:.2f}".format(i,j,self.Gamma[i][j]) ,fontsize=15)
+                    # axs[i,j].set_xlim(0,10)
+                    axs[i,j].set_xscale('log')
+
+                    axs[i,j].tick_params(labelsize=20)
+                    axs[-1,j].set_xlabel(r"$k $",fontsize=20)
+                    axs[i,j].set_yscale('symlog',linthresh=0.1)
+
+            axs[i,0].set_ylabel(r"$c_s(k)$",fontsize=20)
+
+        #axs[0,0].legend(fontsize=20)
+        
+        plt.show()
 
     def plot_g_grid(self):
         fig, axs = plt.subplots(ncols=self.N_species, nrows=self.N_species, figsize=(8*self.N_species,4*self.N_species))
@@ -938,40 +968,104 @@ class Hypernetted_Chain_Solver():
         plt.show()
 
     def plot_g_all_species(self, data_to_compare=None, data_names=None, gmax=None):
-        fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(8*self.N_species,4*self.N_species))
-        fig.suptitle("Radial Distribution Function for all Species",fontsize=20,y=1)
+        fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(10,8))
+        fig.suptitle("Radial Distribution Function for all Species", fontsize=20, y=1)
 
         for i in range(self.N_species):
             for j in range(self.N_species):
                 ax.plot(self.r_array, self.h_r_matrix[i,j]+1,'--.', label=self.name_matrix[i][j] + r", $\Gamma_{{ {0},{1} }}$ = {2:.2f}".format(i,j,self.Gamma[i][j]) )
-        
-        if data_to_compare==None:
-            pass
-        else:
+
+        if data_to_compare:
             for file_name, label in zip(data_to_compare, data_names):
-                r_datas, g_datas = np.array(read_csv(file_name,delimiter=',',header=1)).T
-                ax.plot(r_datas, g_datas,'-', label=label)
+                r_datas, g_datas = np.array(read_csv(file_name, delimiter=',', header=1)).T
+                ax.plot(r_datas, g_datas, '-', label=label)
                 ax.legend(fontsize=15)
 
-        ax.plot()
+        if gmax:
+            ax.set_ylim(0, gmax)
 
-
-        if gmax != None:
-            ax.set_ylim(0,gmax)
-        # ax.set_yscale('log')
-        # ax.set_xscale('log')
         ax.tick_params(labelsize=20)
-        ax.set_xlabel(r"$r/r_s$",fontsize=20)
-        ax.set_xlim(self.del_r,10)
-        ax.set_ylabel(r"$g(r/r_s)$",fontsize=20)
-        # ax.set_yscale('symlog',linthresh=0.1)
-        ax.set_xscale('log')
+        ax.set_xlabel(r"$r/r_s$", fontsize=20)
+        ax.set_xlim(self.del_r, 10)
+        ax.set_ylabel(r"$g(r/r_s)$", fontsize=20)
+        ax.set_ylim(0, 5)
         ax.tick_params(labelsize=15)
+        ax.legend(fontsize=20, loc = 'upper left')
+
+        # Creating the inset plot
+        axins = inset_axes(ax, width='30%', height='30%', loc='upper right')
+        for i in range(self.N_species):
+            for j in range(self.N_species):
+                axins.plot(self.r_array, self.h_r_matrix[i,j]+1)
         
-        plt.tight_layout()#rect=[0.03, 0.03, 0.95, 0.95], pad=0.4, w_pad=5.0, h_pad=5.0)
-        plt.legend(fontsize=20)
-        plt.grid()
+        # axins.set_xscale('log')
+        axins.set_yscale('log')
+        axins.set_xlim(0, 1)
+        axins.set_ylim(1e-2, np.max(self.h_r_matrix+1)*2)
+        axins.tick_params(labelsize=10)
+        axins.set_xlabel(r"$r/r_s$", fontsize=12)
+        axins.set_ylabel(r"$g(r/r_s)$", fontsize=12)
+        
+
+        plt.tight_layout()
         plt.show()
+    
+    def plot_ck_all_species(self, data_to_compare=None, data_names=None, gmax=None):
+        fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(10,8))
+        fig.suptitle("Radial Distribution Function for all Species", fontsize=20, y=1)
+
+        for i in range(self.N_species):
+            for j in range(self.N_species):
+                ax.plot(self.k_array, self.c_k_matrix[i,j]+1,'--.', label=self.name_matrix[i][j] + r", $\Gamma_{{ {0},{1} }}$ = {2:.2f}".format(i,j,self.Gamma[i][j]) )
+
+        if data_to_compare:
+            for file_name, label in zip(data_to_compare, data_names):
+                r_datas, g_datas = np.array(read_csv(file_name, delimiter=',', header=1)).T
+                ax.plot(r_datas, g_datas, '-', label=label)
+                ax.legend(fontsize=15)
+
+        if gmax:
+            ax.set_ylim(0, gmax)
+
+        ax.tick_params(labelsize=20)
+        ax.set_xlim(self.del_r, 10)
+        ax.set_xlabel(r"$k/k_s$", fontsize=20)
+        ax.set_ylabel(r"$c(k/k_s)$", fontsize=20)
+        ax.set_yscale('symlog', linthresh=0.1)
+        ax.tick_params(labelsize=15)
+        ax.legend(fontsize=20)
+        
+        plt.tight_layout()
+        plt.show()
+
+    def plot_csk_all_species(self, data_to_compare=None, data_names=None, gmax=None):
+        fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(10,8))
+        fig.suptitle("Radial Distribution Function for all Species", fontsize=20, y=1)
+
+        for i in range(self.N_species):
+            for j in range(self.N_species):
+                ax.plot(self.k_array, self.c_s_k_matrix[i,j]+1,'--.', label=self.name_matrix[i][j] + r", $\Gamma_{{ {0},{1} }}$ = {2:.2f}".format(i,j,self.Gamma[i][j]) )
+
+        if data_to_compare:
+            for file_name, label in zip(data_to_compare, data_names):
+                r_datas, g_datas = np.array(read_csv(file_name, delimiter=',', header=1)).T
+                ax.plot(r_datas, g_datas, '-', label=label)
+                ax.legend(fontsize=15)
+
+        if gmax:
+            ax.set_ylim(0, gmax)
+
+        ax.tick_params(labelsize=20)
+        ax.set_xlim(self.del_r, 10)
+        ax.set_xlabel(r"$k/k_s$", fontsize=20)
+        ax.set_ylabel(r"$c_s(k/k_s)$", fontsize=20)
+        ax.set_yscale('symlog', linthresh=0.1)
+        ax.tick_params(labelsize=15)
+        ax.legend(fontsize=20)
+        
+        plt.tight_layout()
+        plt.show()
+
 
     def plot_g_vs_murillo(self, gmax=None):
         fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(8*self.N_species,4*self.N_species))
