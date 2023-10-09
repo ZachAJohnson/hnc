@@ -211,12 +211,12 @@ class Plasma_of_Ions_and_Electrons():
 
 	# Solving HNC system of equations
 	def run_ocp_hnc(self):
-		self.ocp_hnc = HNC_solver(1, self.qsp.Γ_matrix[:1,:1], np.array([3/(4*π)]), np.array([self.qsp.Ti]), np.array([self.qsp.m_i]), **self.hnc_options)
+		self.ocp_hnc = HNC_solver(1, self.qsp.Γ_matrix[:1,:1], np.array([3/(4*π)]), np.array([[self.qsp.Ti]]), np.array([self.qsp.m_i]), **self.hnc_options)
 		self.ocp_hnc.c_s_k_matrix *= 0
 		self.ocp_hnc.HNC_solve(**self.hnc_solve_options)
 
 	def run_jellium_hnc(self):
-		self.jellium_hnc = HNC_solver(1, self.qsp.Γ_matrix[-1:,-1:], np.array([self.Zbar*3/(4*π)]), np.array([self.qsp.Te_c]), np.array([m_e]), **self.hnc_options)
+		self.jellium_hnc = HNC_solver(1, self.qsp.Γ_matrix[-1:,-1:], np.array([self.Zbar*3/(4*π)]), np.array([[self.qsp.Te_c]]), np.array([m_e]), **self.hnc_options)
 		self.jellium_hnc.c_s_k_matrix *= 0
 
 		r_array = self.jellium_hnc.r_array
