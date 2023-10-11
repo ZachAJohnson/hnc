@@ -17,13 +17,18 @@ from .constants import *
 
 
 class Hypernetted_Chain_Solver():
-    def __init__(self, N_species, Gamma, number_densities_in_rs, temperature_in_AU_matrix, masses, dst_type=3, h_max=1e3, oz_method='standard',kappa = 1.0, kappa_multiscale = 1.0,  R_max=25.0, N_bins=512, names=None):
+    def __init__(self, N_species, Γ_matrix, number_densities_in_rs, temperature_in_AU_matrix, masses, dst_type=3, h_max=1e3, oz_method='standard',
+        kappa = 1.0, kappa_multiscale = 1.0,  R_max=25.0, N_bins=512, names=None):
+
+        matrify = lambda numbers: np.array(numbers).reshape(N_species,N_species) 
+        vectorfy = lambda numbers: np.array(numbers).reshape(N_species)
+
         self.N_species = N_species
-        self.Gamma = Gamma
-        self.rho = number_densities_in_rs
-        self.Temp_matrix = temperature_in_AU_matrix #(self.mass_list[:,np.newaxis]*self.Temp_list[np.newaxis,:] + self.mass_list[np.newaxis,:]*self.Temp_list[:,np.newaxis])/(self.mass_list[:,np.newaxis] + self.mass_list[np.newaxis,:])
-        self.mass_list = masses
-        self.kappa = kappa
+        self.Γ_matrix = matrify(Γ_matrix) 
+        self.rho = vectorfy(number_densities_in_rs)
+        self.Temp_matrix = matrify(temperature_in_AU_matrix) #(self.mass_list[:,np.newaxis]*self.Temp_list[np.newaxis,:] + self.mass_list[np.newaxis,:]*self.Temp_list[:,np.newaxis])/(self.mass_list[:,np.newaxis] + self.mass_list[np.newaxis,:])
+        self.mass_list = vectorfy(masses)
+        self.kappa = matrify(kappa)
         self.kappa_multiscale = kappa_multiscale
         self.R_max = R_max
         self.N_bins = N_bins
@@ -44,6 +49,7 @@ class Hypernetted_Chain_Solver():
         else:
             self.names=names
         self.make_name_matrix()
+
 
 
     @staticmethod
@@ -127,7 +133,7 @@ class Hypernetted_Chain_Solver():
         self.c_s_r_matrix = self.FT_k_2_r_matrix(self.c_s_k_matrix)
 
     def initialize_βu_matrix(self):
-        self.set_βu_matrix(self.Gamma[:,:,np.newaxis]*(np.exp(- self.kappa * self.r_array) / self.r_array)[np.newaxis, np.newaxis,:])
+        self.set_βu_matrix(self.Γ_matrix[:,:,np.newaxis]/self.r_array[np.newaxis, np.newaxis,:]*np.exp(- self.kappa[:,:,np.newaxis] * self.r_array[np.newaxis, np.newaxis,:]) )
 
     def initialize_c_k(self):
         self.c_k_matrix[:,:,:] = -self.βu_k_matrix[:,:,:]
@@ -270,11 +276,13 @@ class Hypernetted_Chain_Solver():
         """
         Calls routine to invert an NxN x N_bins matrix
         """
-
         A_inverse = np.zeros_like(A_matrix)#np.linalg.inv(A_matrix)
 
-        for k_index in range(self.N_bins):
-            A_inverse[:,:, k_index] = np.linalg.inv(A_matrix[:,:,k_index])
+        if self.N_species==1:
+            A_inverse = 1/A_matrix 
+        else:
+            for k_index in range(self.N_bins):
+                A_inverse[:,:, k_index] = np.linalg.inv(A_matrix[:,:,k_index])
 
         return A_inverse    
 
@@ -282,7 +290,10 @@ class Hypernetted_Chain_Solver():
         """
         Multiplies N x N x N_bin
         """
-        product = np.einsum('ikm,kjm->ijm', A, B)
+        if self.N_species==1:
+            product = A*B
+        else:
+            product = np.einsum('ikm,kjm->ijm', A, B)
         return product
         
     def updater(self,old, new, alpha0 = 0.1):
@@ -321,7 +332,6 @@ class Hypernetted_Chain_Solver():
         tot_eqn = np.nan_to_num(tot_eqn, nan=0, posinf=1e4, neginf=-1e4)
         return tot_eqn
 
-
     def get_all_matrices_from_csk(self, c_s_k_matrix):
         c_k_matrix   = c_s_k_matrix - self.βu_l_k_matrix 
         c_s_r_matrix = self.FT_k_2_r_matrix(c_s_k_matrix)
@@ -335,7 +345,6 @@ class Hypernetted_Chain_Solver():
 
         return c_k_matrix ,c_s_r_matrix ,c_r_matrix ,γs_k_matrix ,γs_r_matrix ,βω_r_matrix ,h_r_matrix ,h_r_matrix ,h_k_matrix
     
-
     def set_all_matrices_from_csk(self, c_s_k_matrix):
         c_k_matrix ,c_s_r_matrix ,c_r_matrix ,γs_k_matrix ,γs_r_matrix ,βω_r_matrix ,h_r_matrix ,h_r_matrix ,h_k_matrix = self.get_all_matrices_from_csk(c_s_k_matrix)
         self.c_k_matrix   = c_k_matrix
@@ -344,7 +353,6 @@ class Hypernetted_Chain_Solver():
         self.γs_k_matrix  = γs_k_matrix
         self.γs_r_matrix  = γs_r_matrix
         self.βω_r_matrix  = βω_r_matrix
-        self.h_r_matrix   = h_r_matrix
         self.h_r_matrix   = h_r_matrix
         self.h_k_matrix   = h_k_matrix
     
@@ -570,7 +578,7 @@ class Hypernetted_Chain_Solver():
         return sol2
         
     # Solver
-    def HNC_solve(self, alpha_method='best', num_iterations=1e3, tol=1e-6, iters_to_wait=1e2, iters_to_use=3, alpha_Ng = 1e-3 ,
+    def HNC_solve(self, num_iterations=1e3, tol=1e-6, iters_to_wait=1e2, iters_to_use=3, alpha_Ng = 1e-3 ,
         alpha_Picard = 0.1, alpha_oz = 0., iters_to_check=10 ,verbose=False):
         """ 
         Integral equation solutions for the classical electron gas 
@@ -849,7 +857,7 @@ class Hypernetted_Chain_Solver():
                 for k in indcs:
                     color = plt.cm.jet(k/n)
                     axs[i,j].plot(self.r_array, self.h_r_matrix_list[k][i,j]+1, color=color ,label='iter: {0}'.format(int(k)))
-                    axs[i,j].set_title(self.name_matrix[i][j] + r", $\Gamma_{{ {0},{1} }}$ = {2:.2f}".format(i,j,self.Gamma[i][j]) ,fontsize=15)
+                    axs[i,j].set_title(self.name_matrix[i][j] + r", $\Gamma_{{ {0},{1} }}$ = {2:.2f}".format(i,j,self.Γ_matrix[i][j]) ,fontsize=15)
                     axs[i,j].set_ylim(0, np.max(  [np.max(self.h_r_matrix_list[k][i,j]+1), 5]) )
                     axs[i,j].set_xlim(0,4)
                     axs[i,j].tick_params(labelsize=20)
@@ -878,7 +886,7 @@ class Hypernetted_Chain_Solver():
                 for k in indcs:
                     color = plt.cm.jet(k/n)
                     axs[i,j].plot(self.r_array, self.FT_k_2_r_matrix( (self.c_s_k_matrix_list - self.βu_l_k_matrix)[k][i,j]), color=color ,label='iter: {0}'.format(int(k)))
-                    axs[i,j].set_title(self.name_matrix[i][j] + r", $\Gamma_{{ {0},{1} }}$ = {2:.2f}".format(i,j,self.Gamma[i][j]) ,fontsize=15)
+                    axs[i,j].set_title(self.name_matrix[i][j] + r", $\Gamma_{{ {0},{1} }}$ = {2:.2f}".format(i,j,self.Γ_matrix[i][j]) ,fontsize=15)
                     axs[i,j].set_xlim(0,4)
 
                     axs[i,j].tick_params(labelsize=20)
@@ -906,7 +914,7 @@ class Hypernetted_Chain_Solver():
                 for k in indcs:
                     color = plt.cm.jet(k/n)
                     axs[i,j].plot(self.k_array, self.c_s_k_matrix_list[k][i,j] - self.βu_l_k_matrix[i,j], color=color ,label='iter: {0}'.format(int(k)))
-                    axs[i,j].set_title(self.name_matrix[i][j] + r", $\Gamma_{{ {0},{1} }}$ = {2:.2f}".format(i,j,self.Gamma[i][j]) ,fontsize=15)
+                    axs[i,j].set_title(self.name_matrix[i][j] + r", $\Gamma_{{ {0},{1} }}$ = {2:.2f}".format(i,j,self.Γ_matrix[i][j]) ,fontsize=15)
                     # axs[i,j].set_xlim(0,10)
                     axs[i,j].set_xscale('log')
 
@@ -934,7 +942,7 @@ class Hypernetted_Chain_Solver():
                 for k in indcs:
                     color = plt.cm.jet(k/n)
                     axs[i,j].plot(self.k_array, self.c_s_k_matrix_list[k][i,j] , color=color ,label='iter: {0}'.format(int(k)))
-                    axs[i,j].set_title(self.name_matrix[i][j] + r", $\Gamma_{{ {0},{1} }}$ = {2:.2f}".format(i,j,self.Gamma[i][j]) ,fontsize=15)
+                    axs[i,j].set_title(self.name_matrix[i][j] + r", $\Gamma_{{ {0},{1} }}$ = {2:.2f}".format(i,j,self.Γ_matrix[i][j]) ,fontsize=15)
                     # axs[i,j].set_xlim(0,10)
                     axs[i,j].set_xscale('log')
 
@@ -958,7 +966,7 @@ class Hypernetted_Chain_Solver():
         for i in range(self.N_species):
             for j in range(self.N_species):
                 axs[i,j].plot(self.r_array, self.h_r_matrix[i,j]+1)
-                axs[i,j].set_title(self.name_matrix[i][j] + r", $\Gamma_{{ {0},{1} }}$ = {2:.2f}".format(i,j,self.Gamma[i][j]) ,fontsize=15)
+                axs[i,j].set_title(self.name_matrix[i][j] + r", $\Gamma_{{ {0},{1} }}$ = {2:.2f}".format(i,j,self.Γ_matrix[i][j]) ,fontsize=15)
                 axs[i,j].set_ylim(0,2)
                 axs[i,j].tick_params(labelsize=20)
                 axs[-1,j].set_xlabel(r"$r/r_s$",fontsize=20)
@@ -978,7 +986,7 @@ class Hypernetted_Chain_Solver():
 
         for i in range(self.N_species):
             for j in range(self.N_species):
-                ax.plot(self.r_array, self.h_r_matrix[i,j]+1,'--.', label=self.name_matrix[i][j] + r", $\Gamma_{{ {0},{1} }}$ = {2:.2f}".format(i,j,self.Gamma[i][j]) )
+                ax.plot(self.r_array, self.h_r_matrix[i,j]+1,'--.', label=self.name_matrix[i][j] + r", $\Gamma_{{ {0},{1} }}$ = {2:.2f}".format(i,j,self.Γ_matrix[i][j]) )
 
         if data_to_compare:
             for file_name, label in zip(data_to_compare, data_names):
@@ -998,7 +1006,8 @@ class Hypernetted_Chain_Solver():
         ax.legend(fontsize=20, loc = 'upper left')
 
         # Creating the inset plot
-        axins = inset_axes(ax, width='30%', height='30%', loc='upper right')
+        # axins = inset_axes(ax, width='30%', height='30%', loc='upper right')
+        axins = ax.inset_axes([0.5, 0.5, 0.47, 0.47])
         for i in range(self.N_species):
             for j in range(self.N_species):
                 axins.plot(self.r_array, self.h_r_matrix[i,j]+1)
@@ -1020,7 +1029,7 @@ class Hypernetted_Chain_Solver():
 
         for i in range(self.N_species):
             for j in range(self.N_species):
-                ax.plot(self.k_array, self.c_k_matrix[i,j]+1,'--.', label=self.name_matrix[i][j] + r", $\Gamma_{{ {0},{1} }}$ = {2:.2f}".format(i,j,self.Gamma[i][j]) )
+                ax.plot(self.k_array, self.c_k_matrix[i,j]+1,'--.', label=self.name_matrix[i][j] + r", $\Gamma_{{ {0},{1} }}$ = {2:.2f}".format(i,j,self.Γ_matrix[i][j]) )
 
         if data_to_compare:
             for file_name, label in zip(data_to_compare, data_names):
@@ -1048,7 +1057,7 @@ class Hypernetted_Chain_Solver():
 
         for i in range(self.N_species):
             for j in range(self.N_species):
-                ax.plot(self.k_array, self.c_s_k_matrix[i,j]+1,'--.', label=self.name_matrix[i][j] + r", $\Gamma_{{ {0},{1} }}$ = {2:.2f}".format(i,j,self.Gamma[i][j]) )
+                ax.plot(self.k_array, self.c_s_k_matrix[i,j]+1,'--.', label=self.name_matrix[i][j] + r", $\Gamma_{{ {0},{1} }}$ = {2:.2f}".format(i,j,self.Γ_matrix[i][j]) )
 
         if data_to_compare:
             for file_name, label in zip(data_to_compare, data_names):
@@ -1114,7 +1123,7 @@ class Hypernetted_Chain_Solver():
 
         for i in range(self.N_species):
             for j in range(self.N_species):
-                ax.plot(self.r_array, self.βu_r_matrix[i,j], label=self.name_matrix[i][j] + r", $\Gamma_{{ {0},{1} }}$ = {2:.2f}".format(i,j,self.Gamma[i][j]) )
+                ax.plot(self.r_array, self.βu_r_matrix[i,j], label=self.name_matrix[i][j] + r", $\Gamma_{{ {0},{1} }}$ = {2:.2f}".format(i,j,self.Γ_matrix[i][j]) )
         
         # ax.set_ylim(0,4)
         ax.set_yscale('symlog',linthresh=1)

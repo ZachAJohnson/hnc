@@ -7,7 +7,7 @@ from .hnc import  Hypernetted_Chain_Solver as HNC_solver
 from .qsps import Quantum_Statistical_Potentials as QSPs
 
 from .constants import *
-from .misc import rs_from_n, n_from_rs, find_η
+from .misc import rs_from_n, n_from_rs, find_η, ThomasFermiZbar
 
 from scipy.interpolate import LinearNDInterpolator
 
@@ -43,7 +43,7 @@ class Plasma_of_Ions_and_Electrons():
 		self.r_c = self.qsp_options['r_c']
 
 		if Zbar==None:
-			self.Zbar = self.ThomasFermiZbar(self.Z, self.ni_cc, Te_in_eV)
+			self.Zbar = ThomasFermiZbar(self.Z, self.ni_cc, Te_in_eV)
 			print("Te: {0:.3f} eV, Zbar = {1:.3f}".format(Te_in_eV, self.Zbar))
 
 		self.names = ["ion", "electron"] 
@@ -57,45 +57,6 @@ class Plasma_of_Ions_and_Electrons():
 			self.get_βPauli()
 		
 		self.make_βu_matrix_from_qsp(self.hnc, self.qsp)
-	
-	@staticmethod
-	def ThomasFermiZbar( Z, num_density, T):
-		"""
-		Finite Temperature Thomas Fermi Charge State using 
-		R.M. More, "Pressure Ionization, Resonances, and the
-		Continuity of Bound and Free States", Adv. in atomic 
-		Mol. Phys., Vol. 21, p. 332 (Table IV).
-
-		Z = atomic number
-		num_density = number density (1/cc)
-		T = temperature (eV)
-		"""
-
-		alpha = 14.3139
-		beta = 0.6624
-		a1 = 0.003323
-		a2 = 0.9718
-		a3 = 9.26148e-5
-		a4 = 3.10165
-		b0 = -1.7630
-		b1 = 1.43175
-		b2 = 0.31546
-		c1 = -0.366667
-		c2 = 0.983333
-
-		convert = num_density*1.6726e-24
-		R = convert/Z
-		T0 = T/Z**(4./3.)
-		Tf = T0/(1 + T0)
-		A = a1*T0**a2 + a3*T0**a4
-		B = -np.exp(b0 + b1*Tf + b2*Tf**7)
-		C = c1*Tf + c2
-		Q1 = A*R**B
-		Q = (R**C + Q1**C)**(1/C)
-		x = alpha*Q**beta
-
-		return Z*x/(1 + x + np.sqrt(1 + 2.*x))
-
 
 	def make_βu_matrix_from_qsp(self, hnc, qsp):
 		pseudopotential, add_bridge, bridge = self.βu_options[ 'pseudopotential' ], self.βu_options['add_bridge'], self.βu_options['bridge']
@@ -390,7 +351,7 @@ class Plasma_of_Ions_and_Electrons():
 				if Zbar_fixed:
 					Zbar = self.Zbar
 				else:
-					Zbar = self.ThomasFermiZbar(self.Z, self.ni_cc, Te_j/eV_to_AU)
+					Zbar = ThomasFermiZbar(self.Z, self.ni_cc, Te_j/eV_to_AU)
 					
 				print("Te: {0:.3f} eV, Zbar = {1:.3f}".format(Te_j/eV_to_AU, Zbar))
 
