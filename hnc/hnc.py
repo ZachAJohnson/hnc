@@ -18,7 +18,7 @@ from .constants import *
 
 class Hypernetted_Chain_Solver():
     def __init__(self, N_species, Γ_matrix, number_densities_in_rs, temperature_in_AU_matrix, masses, dst_type=3, h_max=1e3, oz_method='standard',
-        kappa = 1.0, kappa_multiscale = 1.0,  R_max=25.0, N_bins=512, names=None):
+        kappa = None, kappa_multiscale = 1.0,  R_max=25.0, N_bins=512, names=None):
 
         matrify = lambda numbers: np.array(numbers).reshape(N_species,N_species) 
         vectorfy = lambda numbers: np.array(numbers).reshape(N_species)
@@ -28,7 +28,6 @@ class Hypernetted_Chain_Solver():
         self.rho = vectorfy(number_densities_in_rs)
         self.Temp_matrix = matrify(temperature_in_AU_matrix) #(self.mass_list[:,np.newaxis]*self.Temp_list[np.newaxis,:] + self.mass_list[np.newaxis,:]*self.Temp_list[:,np.newaxis])/(self.mass_list[:,np.newaxis] + self.mass_list[np.newaxis,:])
         self.mass_list = vectorfy(masses)
-        self.kappa = matrify(kappa)
         self.kappa_multiscale = kappa_multiscale
         self.R_max = R_max
         self.N_bins = N_bins
@@ -37,6 +36,10 @@ class Hypernetted_Chain_Solver():
         self.h_max=h_max
         self.Temp_list = np.diag(self.Temp_matrix)
         self.mass_matrix = (self.mass_list[:,np.newaxis]*self.mass_list[np.newaxis,:])/(self.mass_list[:,np.newaxis] + self.mass_list[np.newaxis,:])
+        if kappa is None:
+            self.kappa = np.ones_like(self.Γ_matrix)
+        else: 
+            self.kappa = matrify(kappa)
 
         self.I = np.eye(N_species)
         

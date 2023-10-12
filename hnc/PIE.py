@@ -19,7 +19,7 @@ class Plasma_of_Ions_and_Electrons():
 		self.hnc_options = { 'N_bins' :500, 'R_max':5, 'oz_method':'svt'}
 		self.βu_options  = {'add_bridge':False, 'bridge':'ocp', 'pseudopotential':True}
 		self.qsp_options = {'r_c':0.6,'which_Tij':'thermal'}
-		self.hnc_solve_options = {'alpha_method':'fixed', 'alpha_Picard': 0.5, 'tol':1e-8, 'alpha_Ng':0, 
+		self.hnc_solve_options = { 'alpha_Picard': 0.5, 'tol':1e-8, 'alpha_Ng':0, 
                        'iters_to_wait':1e4, 'num_iterations':1e3, 'verbose':False}
 		self.root_options = {'method':'hybr', 'options': {'eps':1e-6,'maxfev':10000,'factor':100,'xtol':1e-12}}
 		
@@ -36,6 +36,9 @@ class Plasma_of_Ions_and_Electrons():
 		# Initialize class parameters 
 		self.Z, self.A, self.Zbar = Z, A, Zbar
 		self.ni_cc = ni_cc
+		self.ni_AU = ni_cc/cm_to_AU**3
+		self.Te_eV = Te_in_eV
+		self.Ti_eV = Ti_in_eV
 		self.Te = Te_in_eV*eV_to_AU
 		self.Ti = Ti_in_eV*eV_to_AU
 		print("Te_in_eV: {0:.3f}".format(Te_in_eV))
@@ -135,7 +138,7 @@ class Plasma_of_Ions_and_Electrons():
 	def get_βPauli(self):
 		# Define HNC purely for FT
 		Nbins = 1000
-		dense_hnc = HNC_solver(2, self.qsp.Γ_matrix, np.array([1,1]), np.array([1,1]), np.array([1,1]), N_bins=Nbins, R_max=100)
+		dense_hnc = HNC_solver(1, 1, 1,1,1, N_bins=Nbins, R_max=100)
 
 		# Chemical potential
 		η = find_η(self.qsp.Te, self.qsp.ne )
