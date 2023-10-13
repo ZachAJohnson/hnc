@@ -137,8 +137,8 @@ class Plasma_of_Ions_and_Electrons():
 	
 	def get_βPauli(self):
 		# Define HNC purely for FT
-		Nbins = 1000
-		dense_hnc = HNC_solver(1, 1, 1,1,1, N_bins=Nbins, R_max=100)
+		Nbins = 10000
+		dense_hnc = HNC_solver(1, 1, 1,1,1, N_bins=Nbins, R_max=1000)
 
 		# Chemical potential
 		η = find_η(self.qsp.Te, self.qsp.ne )
