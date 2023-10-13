@@ -159,6 +159,8 @@ class Plasma_of_Ions_and_Electrons():
 		
 		# Pick method and make βP
 		h_r = h_ee_dst 
+		self.ideal_jellium_h_r = h_r
+		self.ideal_jellium_r_array = dense_hnc.r_array
 		h_k = dense_hnc.FT_r_2_k(h_r)
 		I_plus_h_rho_inverse = 1/(1 + h_k*self.hnc.rho[0])
 
