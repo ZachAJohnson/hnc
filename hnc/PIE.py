@@ -182,18 +182,32 @@ class Plasma_of_Ions_and_Electrons():
 		self.ocp_hnc.c_s_k_matrix *= 0
 		self.ocp_hnc.HNC_solve(**self.hnc_solve_options)
 
-	def run_jellium_hnc(self):
+	def run_jellium_hnc(self, ideal=True, c_s_k_guess = None):
 		self.jellium_hnc = HNC_solver(1, self.qsp.Γ_matrix[-1:,-1:], np.array([self.Zbar*3/(4*π)]), np.array([[self.qsp.Te_c]]), np.array([m_e]), **self.hnc_options)
 		self.jellium_hnc.c_s_k_matrix *= 0
 
+		# What pauli potential to use
 		r_array = self.jellium_hnc.r_array
 		if self.find_βuee==True:
-			βvee = self.βP_ee + self.qsp.βvee(r_array)-self.qsp.βv_Pauli(r_array, self.qsp.Λee)
+			βv_ee_P = self.βP_ee# + self.qsp.βvee(r_array)-self.qsp.βv_Pauli(r_array, self.qsp.Λee)
 		else:
-			βvee = self.qsp.βvee(r_array)
+			βv_ee_P = self.qsp.βv_Pauli(r_array, self.qsp.Λee)
 			
-		self.jellium_hnc.set_βu_matrix(np.array([[  βvee  ]]))
+		# ideal fermi gas or not
+		if ideal==True:
+			βv_ee = βv_ee_P
+		else:
+			βv_ee = βv_ee_P + self.qsp.βvee(r_array) - self.qsp.βv_Pauli(r_array, self.qsp.Λee)
 		
+		self.jellium_hnc.set_βu_matrix(np.array([[  βv_ee  ]]))
+		
+		# Use guess if it exists
+		if c_s_k_guess is not None:
+			self.jellium_hnc.c_s_k_matrix = c_s_k_guess
+		else:
+			self.jellium_hnc.c_s_k_matrix *= 0 
+
+		# run
 		self.jellium_hnc.HNC_solve(**self.hnc_solve_options)
 
 	def run_hnc(self, hnc=None, qsp=None, c_s_k_guess=None, newton=True):
