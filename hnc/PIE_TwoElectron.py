@@ -1,25 +1,24 @@
 # Based on the Classical Map Effective Potential model for plasmas
+import numpy as np
+from scipy.interpolate import interp1d
+from scipy.integrate import quad
 
-from hnc_Ng import  HNC_solver
-from qsps import *
-from constants import *
-from misc import find_η
+from .hnc import  Hypernetted_Chain_Solver as HNC_solver
+from .qsps import Quantum_Statistical_Potentials as QSPs
 
-from atomic_forces.atomOFDFT.python.physics import ThomasFermi
-from scipy.optimize import root
-
+from .constants import *
+from .misc import rs_from_n, n_from_rs, find_η, ThomasFermiZbar
 
 from scipy.interpolate import LinearNDInterpolator
 
-
-class Two_Electron_Plasma():
-	def __init__(self, Z, A, ni_cc, Ti_in_eV, Te_in_eV, n_up_fraction = 0.5, Zbar=None, single_species_guess=False, Picard_max_err = 1,
+class Plasma_of_Ions_and_Electrons():
+	def __init__(self, Z, A, ni_cc, Ti_in_eV, Te_in_eV, n_up_fraction = 0.5, Zbar=None, find_βuee=False, single_species_guess=False, Picard_max_err = 1,
 		βu_options = {}, hnc_options= {}, qsp_options= {}, hnc_solve_options={}, root_options = {}):
 
 		self.hnc_options = { 'N_bins' :500, 'R_max':5, 'oz_method':'svt'}
 		self.βu_options  = {'add_bridge':False, 'bridge':'ocp', 'pseudopotential':True}
 		self.qsp_options = {'r_c':0.6}
-		self.hnc_solve_options = {'alpha_method':'fixed', 'alpha_Picard': 0.5, 'tol':1e-8, 'alpha_Ng':0, 
+		self.hnc_solve_options = {'alpha_Picard': 0.5, 'tol':1e-8, 'alpha_Ng':0, 
                        'iters_to_wait':1e4, 'num_iterations':1e3, 'verbose':False}
 		self.root_options = {'method':'hybr', 'options': {'eps':1e-6,'maxfev':10000,'factor':100,'xtol':1e-8}}
 		
@@ -34,6 +33,7 @@ class Two_Electron_Plasma():
 		self.n_down_fraction = 1-n_up_fraction
 
 		self.ni_cc = ni_cc
+		self.ni_AU = ni_cc/cm_to_AU**3
 		self.Te = Te_in_eV*eV_to_AU
 		self.Ti = Ti_in_eV*eV_to_AU
 		print("Te_in_eV: {0:.3f}".format(Te_in_eV))
@@ -49,64 +49,34 @@ class Two_Electron_Plasma():
 		self.qsp = self.make_qsp(self.ni_cc, self.Zbar, self.Ti, self.Te)
 		self.hnc = self.make_hnc(self.qsp, self.Zbar)
 		print("Warning, small T<<EF disagree with DW. Need to adjust?")
-		self.get_βPauli()
+		
+		self.find_βuee = ﬁnd_βuee
+		if find_βuee==True:
+			self.get_βPauli()
+
 		self.make_βu_matrix_from_qsp(self.hnc, self.qsp)
 		# self.run_hnc(self.hnc, self.qsp)
 	
-	@staticmethod
-	def ThomasFermiZbar( Z, num_density, T):
-		"""
-		Finite Temperature Thomas Fermi Charge State using 
-		R.M. More, "Pressure Ionization, Resonances, and the
-		Continuity of Bound and Free States", Adv. in Atomic 
-		Mol. Phys., Vol. 21, p. 332 (Table IV).
-
-		Z = atomic number
-		num_density = number density (1/cc)
-		T = temperature (eV)
-		"""
-
-		alpha = 14.3139
-		beta = 0.6624
-		a1 = 0.003323
-		a2 = 0.9718
-		a3 = 9.26148e-5
-		a4 = 3.10165
-		b0 = -1.7630
-		b1 = 1.43175
-		b2 = 0.31546
-		c1 = -0.366667
-		c2 = 0.983333
-
-		convert = num_density*1.6726e-24
-		R = convert/Z
-		T0 = T/Z**(4./3.)
-		Tf = T0/(1 + T0)
-		A = a1*T0**a2 + a3*T0**a4
-		B = -np.exp(b0 + b1*Tf + b2*Tf**7)
-		C = c1*Tf + c2
-		Q1 = A*R**B
-		Q = (R**C + Q1**C)**(1/C)
-		x = alpha*Q**beta
-
-		return Z*x/(1 + x + np.sqrt(1 + 2.*x))
-
 
 	def make_βu_matrix_from_qsp(self, hnc, qsp):
 		pseudopotential, add_bridge, bridge = self.βu_options[ 'pseudopotential' ], self.βu_options['add_bridge'], self.βu_options['bridge']
 		r_array = hnc.r_array
 		if pseudopotential==True:
-			βvei = qsp.βvei_atomic(r_array)
+			βv_ei = qsp.βvei_atomic(r_array)
 		else:
-			βvei = qsp.βvei(r_array)
+			βv_ei = qsp.βvei(r_array)
 		
-		βu_r_matrix = np.array([[qsp.βvii(r_array), qsp.βvei(r_array), qsp.βvei(r_array) ],
-		                        [qsp.βvei(r_array), qsp.βv_Deutsch(qsp.Γee, r_array, qsp.Λee) + self.βP_uu, qsp.βvee(r_array)],
-		                        [qsp.βvei(r_array), qsp.βvee(r_array), qsp.βv_Deutsch(qsp.Γee, r_array, qsp.Λee) + self.βP_uu]])
+		if self.find_βuee==True:
+			βv_uu = self.βP_uu + self.qsp.βvee(r_array) - qsp.βv_Pauli(r_array, qsp.Λee)
+			βv_ud = self.qsp.βvee(r_array) - qsp.βv_Pauli(r_array, qsp.Λee)
+		else:
+			βv_uu = qsp.βvee
 
-		# βu_r_matrix = np.array([[qsp.βvii(r_array), qsp.βvei(r_array), qsp.βvei(r_array) ],
-		#                         [qsp.βvei(r_array), qsp.βvee(r_array), qsp.βvee(r_array) ],
-		#                         [qsp.βvei(r_array), qsp.βvee(r_array), qsp.βvee(r_array) ]])
+		βv_ii = qsp.βvii(r_array)
+		βu_r_matrix = np.array([[βv_ii, βv_ei, βv_ei],
+		                        [βv_ei, βv_uu, βv_ud],
+		                        [βv_ei, βv_ud ,βv_uu]])
+
 
 		print("Warning, setting qsp based on self βP")
 		if add_bridge:
@@ -120,58 +90,141 @@ class Two_Electron_Plasma():
 
 	def make_qsp(self, ni_cc, Zbar, Ti, Te):
 		n_in_AU = ni_cc*1e6 *aB**3
-		ri = QSP_HNC.rs_from_n(n_in_AU)
-		qsp = QSP_HNC(self.Z, self.A, Zbar, Te, Ti, ri, Zbar*n_in_AU, **self.qsp_options)
+		ri = rs_from_n(n_in_AU)
+		qsp = QSPs(self.Z, self.A, Zbar, Te, Ti, ri, Zbar*n_in_AU, **self.qsp_options)
 		return qsp
 
 	def make_hnc(self, qsp, Zbar):
 		densities_in_rs = np.array([  3/(4*π), Zbar*self.n_up_fraction* 3/(4*π), Zbar*self.n_down_fraction*3/(4*π) ])
-		temperatures_AU = np.array([qsp.Ti, qsp.Te_c, qsp.Te_c])
+
+		temperature_matrix_AU = np.array([[qsp.Ti,    qsp.Tie_c, qsp.Tie_c],
+							    [qsp.Tie_c, qsp.Te_c , qsp.Te_c],
+							    [qsp.Tie_c, qsp.Te_c , qsp.Te_c]])
+
 		masses= np.array([qsp.m_i, m_e, m_e])
 		Γ_matrix = np.array([[ qsp.Γii, qsp.Γei , qsp.Γei],
 					   [ qsp.Γei, qsp.Γee , qsp.Γee],
 					   [ qsp.Γei, qsp.Γee , qsp.Γee]])
 
-		hnc = HNC_solver(3, Γ_matrix, densities_in_rs, temperatures_AU, masses, **self.hnc_options)
+		hnc = HNC_solver(3, Γ_matrix, densities_in_rs, temperature_matrix_AU, masses, **self.hnc_options)
 		return hnc
 
-	def run_onlyion_hnc(self):
-		self.onlyion_hnc = HNC_solver(1, self.qsp.Γ_matrix[:1,:1], np.array([3/(4*π)]), np.array([self.qsp.Ti]), np.array([self.qsp.m_i]), **self.hnc_options)
-		self.onlyion_hnc.c_s_k_matrix *= 0
-		self.onlyion_hnc.HNC_solve(**self.hnc_solve_options)
-
+	# Functions for making Pauli potential
+	# See "Simple classical mapping of the spin-polarized quantum electron gas: distribution functions and local-field corrections" (1999)
+	# Dharma-Wardana and Perrot
+	# https://doi.org/10.1103/physrevlett.84.959
 
 	def get_η(self):
 		self.η = find_η(self.Te, self.qsp.ne)
 
-	def h_uu_ID_of_r(self, ne, T, r, η):
-		sin_arg = np.sqrt(2*T*m_e)*r
-		t_max = 5*η
+	# def h_uu_ID_of_r(self, ne, T, r, η):
+	# 	sin_arg = np.sqrt(2*T*m_e)*r
+	# 	t_max = 5*η
 
-		t = np.linspace(0,t_max, num=10000) 
-		dt = t[1]-t[0]
-		κ = 3*(2*T*m_e) / (self.qsp.k_F**3 * r)  * np.sum(dt* t*np.sin(sin_arg*t) /(1+np.exp(t**2-η) )  )
-		#     h_ee = -0.5*κ**2
-		h_uu_ID = -κ**2
-		return h_uu_ID
+	# 	t = np.linspace(0,t_max, num=10000) 
+	# 	dt = t[1]-t[0]
+	# 	κ = 3*(2*T*m_e) / (self.qsp.k_F**3 * r)  * np.sum(dt* t*np.sin(sin_arg*t) /(1+np.exp(t**2-η) )  )
+	# 	h_uu_ID = -κ**2
+	# 	return h_uu_ID
 
-	def get_hee_ID(self):
-		self.get_η()
-		self.h_uu_ID = np.array([self.h_uu_ID_of_r(self.qsp.ne, self.Te, r , self.η) for r in self.hnc.r_array])
-		self.h_ee_ID = self.h_uu_ID/2
 
-	def get_βPauli(self): #Pauli potential
-		self.get_hee_ID()
-		h_r = self.h_uu_ID.copy() # could do ee instead
-		h_k = self.hnc.FT_r_2_k(h_r)
+	# def get_hee_ID(self):
+	# 	self.get_η()
+	# 	self.h_uu_ID = np.array([self.h_uu_ID_of_r(self.qsp.ne, self.Te, r , self.η) for r in self.hnc.r_array])
 
-		I_plus_h_rho_inverse = 1/(1 + h_k*self.hnc.rho[0])
-		# I_plus_h_rho_inverse = 1/(1 + self.n_up_fraction*h_k*self.hnc.rho[0]) #???
+	# def get_βPauli(self, ambiguous_half=True): #Pauli potential
+	# 	self.get_hee_ID()
+	# 	h_r = self.h_uu_ID.copy() # could do ee instead
+	# 	h_k = self.hnc.FT_r_2_k(h_r)
+
+	# 	if ambiguous_half==True: # I think True, DW papers seems to use False
+	# 		I_plus_h_rho_inverse_uu = 1/(1 + self.n_up_fraction*h_k*self.hnc.rho[0])
+	# 		I_plus_h_rho_inverse_dd = 1/(1 + (1-self.n_up_fraction)*h_k*self.hnc.rho[0])
+	# 	else:
+	# 		I_plus_h_rho_inverse = 1/(1 + h_k*self.hnc.rho[0])
+	# 	# I_plus_h_rho_inverse = 1/(1 + self.n_up_fraction*h_k*self.hnc.rho[0]) #???
+	# 	c_k = I_plus_h_rho_inverse * h_k
+	# 	c_r = self.hnc.FT_k_2_r(c_k)
+
+	# 	# Approximate with HNC
+	# 	self.βP_uu = h_r - c_r - np.log(h_r+1)
+	def get_βPauli(self):
+		# Define HNC purely for FT
+		if self.n_up_fraction != 0.5:
+			print("WARNING: n_up not equal to n_down not implemented for βPauli.")
+		Nbins = 100000
+		dense_hnc = HNC_solver(1, 1, 1,1,1, N_bins=Nbins, R_max=10000)
+
+		# Chemical potential
+		η = find_η(self.qsp.Te, self.qsp.ne )
+
+		#Explict method
+		# def huu_of_r_explicit(r):
+		# 	sin_arg = np.sqrt(2*self.qsp.Te*m_e)*r
+		# 	t_max = 10*η
+		# 	integrand = lambda t: t*np.sin(sin_arg*t)/(1+np.exp(t**2-η))
+		# 	κ = 3*(2*self.qsp.Te*m_e) / (self.qsp.k_F**3 * r) *quad(integrand, 0, t_max)[0]
+		# 	h_uu = -κ**2
+		# 	return h_uu
+		# h_uu_explicit = np.array([huu_of_r_explicit(r) for r in dense_hnc.r_array])
+		
+		# DST method
+		f_of_k = 1/(  1+np.exp((dense_hnc.k_array/self.qsp.ri)**2/(2*m_e*self.qsp.Te) - η) )
+		h_uu_dst = -self.qsp.ri**-6*dense_hnc.FT_k_2_r(f_of_k)**2/(0.5*self.qsp.ne)**2 
+		
+		# Pick method and make βP
+		h_r = h_uu_dst 
+		self.ideal_jellium_h_r = h_r
+		self.ideal_jellium_r_array = dense_hnc.r_array
+		h_k = dense_hnc.FT_r_2_k(h_r)
+		I_plus_h_rho_inverse = 1/(1 + h_k*self.hnc.rho[1])
+
 		c_k = I_plus_h_rho_inverse * h_k
-		c_r = self.hnc.FT_k_2_r(c_k)
+		c_r = dense_hnc.FT_k_2_r(c_k)
 
 		# Approximate with HNC
-		self.βP_uu = h_r - c_r - np.log(h_r+1)
+		βP_uu = h_r - c_r - np.log(h_r+1)
+
+		self.βP_uu = interp1d(dense_hnc.r_array, βP_uu, kind='linear', bounds_error=False, fill_value = (βP_uu[0], 0) )(self.hnc.r_array)
+
+
+	# Solving HNC system of equations
+	def run_ocp_hnc(self):
+		self.ocp_hnc = HNC_solver(1, self.qsp.Γ_matrix[:1,:1], np.array([3/(4*π)]), np.array([[self.qsp.Ti]]), np.array([self.qsp.m_i]), **self.hnc_options)
+		self.ocp_hnc.c_s_k_matrix *= 0
+		self.ocp_hnc.HNC_solve(**self.hnc_solve_options)
+
+	def run_jellium_hnc(self, ideal=False, c_s_k_guess = None):
+		self.jellium_hnc = HNC_solver(2, self.qsp.Γee*np.ones((2,2)),
+		 [self.n_up_fraction * self.Zbar*3/(4*π), self.n_down_fraction * self.Zbar*3/(4*π) ], self.qsp.Te_c*np.ones((2,2)), [m_e,m_e], **self.hnc_options)
+		self.jellium_hnc.c_s_k_matrix *= 0
+
+		r_array = self.jellium_hnc.r_array
+		if self.find_βuee==True:
+			βv_uu_P = self.βP_uu #+ self.βvee(r_array) - qsp.βv_Pauli(r_array, qsp.Λee)
+			βv_ud_P = np.zeros_like(r_array)# - qsp.βv_Pauli(r_array, qsp.Λee)
+		else:
+			βv_uu_P = qsp.βv_Pauli(r_array, self.qsp.Λee)
+			βv_ud_P = qsp.βv_Pauli(r_array, self.qsp.Λee)
+		
+		if ideal==True:
+			βv_uu = βv_uu_P
+			βv_ud = βv_ud_P
+		else:
+			βv_uu = βv_uu_P + self.qsp.βvee(r_array) - self.qsp.βv_Pauli(r_array, self.qsp.Λee)
+			βv_ud = βv_ud_P + self.qsp.βvee(r_array) - self.qsp.βv_Pauli(r_array, self.qsp.Λee)
+
+
+		self.jellium_hnc.set_βu_matrix(np.array([[  βv_uu, βv_ud  ],
+								     [  βv_ud, βv_uu  ]]))
+		
+		if c_s_k_guess is not None:
+			self.jellium_hnc.c_s_k_matrix = c_s_k_guess
+		else:
+			self.jellium_hnc.c_s_k_matrix *= 0 
+
+		self.jellium_hnc.HNC_solve(**self.hnc_solve_options)
+
 	   
 	def run_hnc(self, hnc=None, qsp=None, c_s_k_guess=None):
 		if hnc==None and qsp==None:

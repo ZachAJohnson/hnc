@@ -106,34 +106,34 @@ class Plasma_of_Ions_and_Electrons():
 	def get_η(self):
 		self.η = find_η(self.Te, self.qsp.ne)
 
-	def h_uu_ID_of_r(self, ne, T, r, η):
-		sin_arg = np.sqrt(2*T*m_e)*r
-		t_max = 5*η
+	# def h_uu_ID_of_r(self, ne, T, r, η):
+	# 	sin_arg = np.sqrt(2*T*m_e)*r
+	# 	t_max = 5*η
 
-		t = np.linspace(0,t_max, num=10000) 
-		dt = t[1]-t[0]
-		κ = 3*(2*T*m_e) / (self.qsp.k_F**3 * r)  * np.sum(dt* t*np.sin(sin_arg*t) /(1+np.exp(t**2-η) )  )
-		h_uu_ID = -κ**2
-		return h_uu_ID
+	# 	t = np.linspace(0,t_max, num=10000) 
+	# 	dt = t[1]-t[0]
+	# 	κ = 3*(2*T*m_e) / (self.qsp.k_F**3 * r)  * np.sum(dt* t*np.sin(sin_arg*t) /(1+np.exp(t**2-η) )  )
+	# 	h_uu_ID = -κ**2
+	# 	return h_uu_ID
 
-	def get_hee_ID(self):
-		self.get_η()
-		self.h_uu_ID = np.array([self.h_uu_ID_of_r(self.qsp.ne, self.Te, r , self.η) for r in self.hnc.r_array])
-		self.h_ee_ID = self.h_uu_ID/2 # average of completely uncorrelated anti-spins (h=0), and this same-spin h
+	# def get_hee_ID(self):
+	# 	self.get_η()
+	# 	self.h_uu_ID = np.array([self.h_uu_ID_of_r(self.qsp.ne, self.Te, r , self.η) for r in self.hnc.r_array])
+	# 	self.h_ee_ID = self.h_uu_ID/2 # average of completely uncorrelated anti-spins (h=0), and this same-spin h
 		
 		
-	def get_βPauli(self): #Pauli potential
-		self.get_hee_ID()
-		h_r = self.h_ee_ID.copy() 
-		h_k = self.hnc.FT_r_2_k(h_r)
+	# # def get_βPauli(self): #Pauli potential
+	# # 	self.get_hee_ID()
+	# # 	h_r = self.h_ee_ID.copy() 
+	# # 	h_k = self.hnc.FT_r_2_k(h_r)
 
-		I_plus_h_rho_inverse = 1/(1 + h_k*self.hnc.rho[0])
+	# # 	I_plus_h_rho_inverse = 1/(1 + h_k*self.hnc.rho[1])
 
-		c_k = I_plus_h_rho_inverse * h_k
-		c_r = self.hnc.FT_k_2_r(c_k)
+	# # 	c_k = I_plus_h_rho_inverse * h_k
+	# # 	c_r = self.hnc.FT_k_2_r(c_k)
 
-		# Approximate with HNC
-		self.βP_ee = h_r - c_r - np.log(h_r+1)
+	# # 	# Approximate with HNC
+	# # 	self.βP_ee = h_r - c_r - np.log(h_r+1)
 	
 	def get_βPauli(self):
 		# Define HNC purely for FT
@@ -149,20 +149,21 @@ class Plasma_of_Ions_and_Electrons():
 			t_max = 10*η
 			integrand = lambda t: t*np.sin(sin_arg*t)/(1+np.exp(t**2-η))
 			κ = 3*(2*self.qsp.Te*m_e) / (self.qsp.k_F**3 * r) *quad(integrand, 0, t_max)[0]
-			h = -0.5*κ**2
-			return h
+			h_uu = -κ**2
+			h_ee = 0.5*h_uu
+			return h_ee
 		h_ee_explicit = np.array([h_of_r_explicit(r) for r in dense_hnc.r_array])
 		
 		# DST method
 		f_of_k = 1/(  1+np.exp((dense_hnc.k_array/self.qsp.ri)**2/(2*m_e*self.qsp.Te) - η) )
-		h_ee_dst = - 0.5*self.qsp.ri**-6*dense_hnc.FT_k_2_r(f_of_k)**2/(0.5*self.qsp.ne)**2 
-		
+		h_uu_dst = - self.qsp.ri**-6*dense_hnc.FT_k_2_r(f_of_k)**2/(0.5*self.qsp.ne)**2 
+		h_ee_dst = 0.5*h_uu_dst
 		# Pick method and make βP
 		h_r = h_ee_dst 
 		self.ideal_jellium_h_r = h_r
 		self.ideal_jellium_r_array = dense_hnc.r_array
 		h_k = dense_hnc.FT_r_2_k(h_r)
-		I_plus_h_rho_inverse = 1/(1 + h_k*self.hnc.rho[0])
+		I_plus_h_rho_inverse = 1/(1 + h_k*self.hnc.rho[1])
 
 		c_k = I_plus_h_rho_inverse * h_k
 		c_r = dense_hnc.FT_k_2_r(c_k)
@@ -195,7 +196,7 @@ class Plasma_of_Ions_and_Electrons():
 		
 		self.jellium_hnc.HNC_solve(**self.hnc_solve_options)
 
-	def run_hnc(self, hnc=None, qsp=None, c_s_k_guess=None):
+	def run_hnc(self, hnc=None, qsp=None, c_s_k_guess=None, newton=True):
 		if hnc==None and qsp==None:
 			hnc = self.hnc
 			qsp = self.qsp
@@ -209,7 +210,9 @@ class Plasma_of_Ions_and_Electrons():
 
 		hnc.invert_HNC_OZ([1])
 		
-		if converged!=0 and hnc.final_Picard_err < self.Picard_max_err:
+		if newton==False:
+			pass
+		elif converged!=0 and hnc.final_Picard_err < self.Picard_max_err:
 			hnc.HNC_newton_solve( **self.root_options)
 		elif hnc.final_Picard_err > self.Picard_max_err:
 			print("QUIT: Picard Err too high. Newton assumed not to converge. Try better initial condition or smaller α.")

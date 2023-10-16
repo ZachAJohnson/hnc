@@ -8,7 +8,7 @@ axes.labelsize : 30
 axes.formatter.use_mathtext: True
 axes.labelweight:   bold  # weight of the x and y labels
 axes.labelcolor:    black
-axes.linewidth: 3
+axes.linewidth: 2
 
 #lines
 lines.linewidth : 2
@@ -25,8 +25,13 @@ xtick.major.width: 2
 ytick.major.size: 10
 ytick.major.width: 2
 
-xtick.direction: out
-ytick.direction: out
+xtick.minor.size: 5
+xtick.minor.width: 1
+ytick.minor.size: 5
+ytick.minor.width: 1
+
+xtick.direction: in
+ytick.direction: in
 
 #legend
 legend.loc: upper right
