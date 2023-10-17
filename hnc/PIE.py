@@ -144,15 +144,15 @@ class Plasma_of_Ions_and_Electrons():
 		η = find_η(self.qsp.Te, self.qsp.ne )
 
 		#Explict method
-		def h_of_r_explicit(r):
-			sin_arg = np.sqrt(2*self.qsp.Te*m_e)*r
-			t_max = 10*η
-			integrand = lambda t: t*np.sin(sin_arg*t)/(1+np.exp(t**2-η))
-			κ = 3*(2*self.qsp.Te*m_e) / (self.qsp.k_F**3 * r) *quad(integrand, 0, t_max)[0]
-			h_uu = -κ**2
-			h_ee = 0.5*h_uu
-			return h_ee
-		h_ee_explicit = np.array([h_of_r_explicit(r) for r in dense_hnc.r_array])
+		# def h_of_r_explicit(r):
+		# 	sin_arg = np.sqrt(2*self.qsp.Te*m_e)*r
+		# 	t_max = 10*η
+		# 	integrand = lambda t: t*np.sin(sin_arg*t)/(1+np.exp(t**2-η))
+		# 	κ = 3*(2*self.qsp.Te*m_e) / (self.qsp.k_F**3 * r) *quad(integrand, 0, t_max)[0]
+		# 	h_uu = -κ**2
+		# 	h_ee = 0.5*h_uu
+		# 	return h_ee
+		# h_ee_explicit = np.array([h_of_r_explicit(r) for r in dense_hnc.r_array])
 		
 		# DST method
 		f_of_k = 1/(  1+np.exp((dense_hnc.k_array/self.qsp.ri)**2/(2*m_e*self.qsp.Te) - η) )
@@ -171,7 +171,8 @@ class Plasma_of_Ions_and_Electrons():
 		# Approximate with HNC
 		βP_ee = h_r - c_r - np.log(h_r+1)
 
-		self.βP_ee = interp1d(dense_hnc.r_array, βP_ee, kind='linear', bounds_error=False, fill_value = (βP_ee[0], 0) )(self.hnc.r_array)
+		self.βP_ee_func = interp1d(dense_hnc.r_array, βP_ee, kind='linear', bounds_error=False, fill_value = (βP_ee[0], 0) )
+		self.βP_ee = self.βP_ee_func(self.hnc.r_array)
 
 
 
