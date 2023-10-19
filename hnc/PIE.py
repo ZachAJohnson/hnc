@@ -3,7 +3,7 @@ import numpy as np
 from scipy.interpolate import interp1d
 from scipy.integrate import quad
 
-from .hnc import  Hypernetted_Chain_Solver as HNC_solver
+from .hnc import  Integral_Equation_Solver as IET_solver
 from .qsps import Quantum_Statistical_Potentials as QSPs
 
 from .constants import *
@@ -79,9 +79,9 @@ class Plasma_of_Ions_and_Electrons():
 		                        [βvei, βvee]])
 		if add_bridge:
 			if bridge=='ocp':
-				βu_r_matrix[0,0] = βu_r_matrix[0,0] - HNC_solver.Bridge_function_OCP(r_array, qsp.Γii)
+				βu_r_matrix[0,0] = βu_r_matrix[0,0] - IET_solver.Bridge_function_OCP(r_array, qsp.Γii)
 			elif bridge=='yukawa':
-				βu_r_matrix[0,0] = βu_r_matrix[0,0] - HNC_solver.Bridge_function_Yukawa(r_array, qsp.Γii, qsp.get_κ())
+				βu_r_matrix[0,0] = βu_r_matrix[0,0] - IET_solver.Bridge_function_Yukawa(r_array, qsp.Γii, qsp.get_κ())
 		
 		hnc.set_βu_matrix(βu_r_matrix)
 		hnc.initialize_c_k()
@@ -96,7 +96,7 @@ class Plasma_of_Ions_and_Electrons():
 		densities_in_rs = np.array([  3/(4*π), Zbar * 3/(4*π) ])
 		temperature_matrix_AU = qsp.Tij
 		masses= np.array([qsp.m_i, m_e])
-		hnc = HNC_solver(2, qsp.Γ_matrix, densities_in_rs, temperature_matrix_AU, masses, **self.hnc_options)
+		hnc = IET_solver(2, qsp.Γ_matrix, densities_in_rs, temperature_matrix_AU, masses, **self.hnc_options)
 		return hnc
 	
 	# Functions for making Pauli potential
@@ -138,7 +138,7 @@ class Plasma_of_Ions_and_Electrons():
 	def get_βPauli(self):
 		# Define HNC purely for FT
 		Nbins = 10000
-		dense_hnc = HNC_solver(1, 1, 1,1,1, N_bins=Nbins, R_max=1000)
+		dense_hnc = IET_solver(1, 1, 1,1,1, N_bins=Nbins, R_max=1000)
 
 		# Chemical potential
 		η = find_η(self.qsp.Te, self.qsp.ne )
@@ -179,12 +179,12 @@ class Plasma_of_Ions_and_Electrons():
 
 	# Solving HNC system of equations
 	def run_ocp_hnc(self):
-		self.ocp_hnc = HNC_solver(1, self.qsp.Γ_matrix[:1,:1], np.array([3/(4*π)]), np.array([[self.qsp.Ti]]), np.array([self.qsp.m_i]), **self.hnc_options)
+		self.ocp_hnc = IET_solver(1, self.qsp.Γ_matrix[:1,:1], np.array([3/(4*π)]), np.array([[self.qsp.Ti]]), np.array([self.qsp.m_i]), **self.hnc_options)
 		self.ocp_hnc.c_s_k_matrix *= 0
 		self.ocp_hnc.HNC_solve(**self.hnc_solve_options)
 
 	def run_jellium_hnc(self, ideal=True, c_s_k_guess = None):
-		self.jellium_hnc = HNC_solver(1, self.qsp.Γ_matrix[-1:,-1:], np.array([self.Zbar*3/(4*π)]), np.array([[self.qsp.Te_c]]), np.array([m_e]), **self.hnc_options)
+		self.jellium_hnc = IET_solver(1, self.qsp.Γ_matrix[-1:,-1:], np.array([self.Zbar*3/(4*π)]), np.array([[self.qsp.Te_c]]), np.array([m_e]), **self.hnc_options)
 		self.jellium_hnc.c_s_k_matrix *= 0
 
 		# What pauli potential to use
