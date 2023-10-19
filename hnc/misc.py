@@ -27,7 +27,8 @@ def Gamma(T, n, Z):
 
 def Debye_length(T, ni, Zbar):
     ne = Zbar*ni
-    λD = 1/np.sqrt(  4*π*ne/T + 4*π*Zbar**2*ni/T  )
+    # λD = 1/np.sqrt(  4*π*ne/T + 4*π*Zbar**2*ni/T  )
+    λD = 1/np.sqrt(  4*π*ne/T )
     return λD
 
 def Kappa(T, ni, Zbar):
