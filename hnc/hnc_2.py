@@ -1,3 +1,7 @@
+# Zach Johnson
+# Idea based on "Efficient Newton-Raphson and implicit Euler methods for solving the HNC equation"
+#                    By ANTHONY BUSIGINt and COLIN R. PHILLIPS
+
 import numpy as np
 from scipy import fftpack
 from scipy.optimize import newton, root
@@ -16,7 +20,7 @@ from .constants import *
 
 
 
-class Integral_Equation_Solver():
+class Hypernetted_Chain_Solver():
     def __init__(self, N_species, Γ_matrix, number_densities_in_rs, temperature_in_AU_matrix, masses, dst_type=3, h_max=1e3, oz_method='standard',
         kappa = None, kappa_multiscale = 1.0,  R_max=25.0, N_bins=512, names=None, closure='hnc'):
 
@@ -177,11 +181,11 @@ class Integral_Equation_Solver():
         self.dimless_dens = 3. / (4 * np.pi)
 
     def FT_r_2_k(self, input_array):
-        from_dst = self.fact_r_2_k * fftpack.dst(self.r_array * input_array, type=self.dst_type)
+        from_dst = self.fact_r_2_k * fftpack.dst(self.r_array * input_array, type=3)
         return from_dst / self.k_array
 
     def FT_k_2_r(self, input_array):
-        from_idst = self.fact_k_2_r * fftpack.idst(self.k_array * input_array, type=self.dst_type)
+        from_idst = self.fact_k_2_r * fftpack.idst(self.k_array * input_array, type=3)
         return from_idst / self.r_array
 
     def FT_r_2_k_matrix(self, f_r):
@@ -342,8 +346,8 @@ class Integral_Equation_Solver():
         c_r_matrix   = c_s_r_matrix - self.βu_l_r_matrix
         γs_k_matrix = self.get_γs_k_matrix(c_s_k_matrix)                           # 1. c_k, u_l_k -> γ_k   (Definition)
         γs_r_matrix = self.FT_k_2_r_matrix(γs_k_matrix) # γ_k        -> γ_r   (FT)     
-        βω_r_matrix = self.βu_s_r_matrix - γs_r_matrix   # potential of mean force    
-        h_r_matrix = γs_r_matrix + c_s_r_matrix
+        βω_r_matrix = self.βu_s_r_matrix - γs_r_matrix   # potential of mean force
+        h_r_matrix = -1 + np.exp(γs_r_matrix - self.βu_s_r_matrix) # 2. γ_r,u_s_r  -> h_r   (HNC)   
         h_r_matrix = np.where(h_r_matrix>self.h_max, self.h_max, h_r_matrix)
         h_k_matrix = self.FT_r_2_k_matrix(h_r_matrix)
 
@@ -351,6 +355,7 @@ class Integral_Equation_Solver():
     
     def set_all_matrices_from_csk(self, c_s_k_matrix):
         c_k_matrix ,c_s_r_matrix ,c_r_matrix ,γs_k_matrix ,γs_r_matrix ,βω_r_matrix ,h_r_matrix ,h_r_matrix ,h_k_matrix = self.get_all_matrices_from_csk(c_s_k_matrix)
+        self.c_s_k_matrix = c_s_k_matrix   
         self.c_k_matrix   = c_k_matrix
         self.c_s_r_matrix = c_s_r_matrix
         self.c_r_matrix   = c_r_matrix
@@ -364,74 +369,6 @@ class Integral_Equation_Solver():
     def Picard_c_s_k(self, old_c_s_k_matrix, new_c_s_k_matrix, alpha=0.1 ):
         return old_c_s_k_matrix*(1-alpha) + new_c_s_k_matrix*alpha
 
-    def Ng_c_s_k(self, num_to_use=3, alpha=1e-3):
-        """
-        See Appendix of
-        "Hypernetted chain solutions for the classical one‐component plasma up to Γ=7000" - Kin‐Chue Ng
-        """
-        actual_c_s_k_n = self.c_s_k_matrix_list[-num_to_use:][::-1]# f_n of Ng  with f[0]=f_n, f[1]=f_{n-1}
-        next_c_s_k_n = np.array([ self.guess_c_s_k_matrix(c_s_k_n) for c_s_k_n in actual_c_s_k_n]) # g_n
-        # print(next_c_s_k_n.shape)
-        dn_list = next_c_s_k_n - actual_c_s_k_n # d_n = g_n-f_n , 0 iff converged
-        print("|d_n|^2 = ", [np.linalg.norm(dn) for dn in dn_list]  )
-
-        Δd_list = dn_list[0] - dn_list[1:] #  = [d_{01}, d_{02}, ... ]
-        Δd_flattened_list = np.array([Δd.flatten() for Δd in Δd_list]) # flatten the species matrix components
-
-        A_sum_matrix = np.sum(Δd_flattened_list[:,np.newaxis]*Δd_flattened_list[np.newaxis,:] ,axis = (2) ) # Each component (d_01, d_01),...
-        
-        b_vec = np.sum(  dn_list[0].flatten() * Δd_flattened_list, axis=(1)  )
-
-        best_αs_list = np.linalg.inv(A_sum_matrix) @ b_vec # = [c_1, c_2]
-
-        # Try by each species combination
-        # best_αs_matrix = np.zeros((self.N_species, self.N_species, num_to_use-1))
-        # actual_c_s_k_n = np.array(self.c_s_k_matrix_list)[-num_to_use:][::-1]# reverse so first index is the actual c_s_k
-        # next_c_s_k_n = np.array([ self.guess_c_s_k_matrix(c_s_k_n) for c_s_k_n in actual_c_s_k_n])
-                
-        # for i in range(self.N_species):
-        #     for j in range(self.N_species):
-        #         # print(next_c_s_k_n.shape)
-        #         dn_list = next_c_s_k_n[:,i,j] - actual_c_s_k_n[:,i,j]
-        #         Δd_list = np.array(dn_list[0] - dn_list[1:])
-        #         # Δd_flattened_list = np.array([Δd for Δd in Δd_list])
-                
-        #         A_sum_matrix = np.sum(Δd_list[:,np.newaxis]*Δd_list[np.newaxis,:] ,axis = (2) )
-
-        #         b_vec = np.sum(  dn_list[0] * Δd_list, axis=(1)  )
-        #         best_αs_matrix[i,j] = np.linalg.inv(A_sum_matrix) @ b_vec
-        # print(" α matrix, ", best_αs_matrix)
-
-                
-
-
-        # αs_size =  np.linalg.norm(best_αs_list)/np.sqrt(len(best_αs_list))
-        # best_αs_list =  best_αs_list * alpha#/αs_size
-        
-        # def c_err_1(αs):
-        #     c_s = next_c_s_k_n[-1]*(1-np.sum(αs)) + np.sum(αs[:,np.newaxis,np.newaxis,np.newaxis]*next_c_s_k_n[:-1], axis=0)
-        #     tot_err = self.total_err(c_s)
-        #     # ΔNg     = np.linalg.norm( dn_list[-1] - np.sum(αs[1:,np.newaxis,np.newaxis,np.newaxis]*Δd_list, axis=0) )
-        #     # print("HNC αs: {0}, tot_err: {1:.5e}, Ng_err: {2:.5e} ".format(np.array(αs), tot_err, ΔNg))
-        #     # print("HNC αs: {0}, tot_err: {1:.5e}".format(np.array(αs), tot_err))
-        #     return tot_err
-        
-        # method='L-BFGS-B'
-        # method='SLSQP'
-        # method='Nelder-Mead'
-        # tol=1e-6
-        # α_bounds = [(0,1)]*len(best_αs_list)
-        # res = minimize(c_err_1 , best_αs_list, bounds=α_bounds, tol=tol, options={'maxiter':int(1e3)}, method=method) 
-        # αs = res.x
-        αs = best_αs_list
-        αs =  np.array([(1-np.sum(αs)), *αs]) # = [(1-c_1 -c_2..., c_1, c_2, ...)]
-        print(" αs: ", αs)
-        # print(" Linear αs guess: ", best_αs_list)
-        # print(" Result of αs minimization:", res.x, res.success, res.message)
-        self.Ng_guess_c_s_k = np.sum(αs[:,np.newaxis,np.newaxis,np.newaxis]*next_c_s_k_n, axis=0)
-        # new_c_s_k = self.Picard_c_s_k(self.c_s_k_matrix, self.Ng_guess_c_s_k, alpha=alpha)
-        new_c_s_k = self.Ng_guess_c_s_k
-        return  new_c_s_k
 
     def total_err(self, c_s_k_matrix):
         c_s_r_matrix = self.FT_k_2_r_matrix(c_s_k_matrix)
@@ -525,13 +462,21 @@ class Integral_Equation_Solver():
         elif self.closure in ['PY','py']:
             return self.guess_c_s_k_matrix_py(c_s_k_matrix)
 
-    def guess_c_s_k_matrix_hnc(self, c_s_k_matrix):
+    def guess_γ_s_r_matrix_hnc(self, γ_s_r_matrix):
+        c_s_r_matrix = -1 - γ_s_r_matrix + np.exp(γ_s_r_matrix - self.βu_s_r_matrix) # 2. γ_r,u_s_r  -> h_r   (HNC)   
+        c_s_k_matrix = self.FT_r_2_k_matrix(c_s_r_matrix)
+        new_γ_s_k_matrix = self.get_γs_k_matrix(c_s_k_matrix)
+        new_γ_s_r_matrix = self.FT_k_2_r_matrix(new_γ_s_k_matrix)
+        
+        return new_γ_s_r_matrix
+
+    def guess_c_s_k_matrix_py(self, c_s_k_matrix):
         γs_k_matrix = self.get_γs_k_matrix(c_s_k_matrix)                           # 1. c_k, u_l_k -> γ_k   (Definition)
 
         γs_r_matrix = self.FT_k_2_r_matrix(γs_k_matrix) # γ_k        -> γ_r   (FT)     
-        h_r_matrix = -1 + np.exp(γs_r_matrix - self.βu_s_r_matrix) # 2. γ_r,u_s_r  -> h_r   (HNC)   
-        h_r_matrix = np.where(h_r_matrix>self.h_max, self.h_max, h_r_matrix)
-        h_k_matrix = self.FT_r_2_k_matrix(h_r_matrix)
+        h_r_matrix  = np.exp(-self.βu_r_matrix)*(1 + γs_r_matrix + self.βu_l_r_matrix)    
+        h_r_matrix  = np.where(h_r_matrix>self.h_max, self.h_max, h_r_matrix)
+        h_k_matrix  = self.FT_r_2_k_matrix(h_r_matrix)
         # Plug into HNC equation
 
         new_c_s_r_matrix = h_r_matrix - γs_r_matrix # 3. h_r, γ_r   -> c_s_r (Ornstein-Zernicke)
@@ -539,68 +484,6 @@ class Integral_Equation_Solver():
         
         return new_c_s_k_matrix
 
-    def guess_c_s_k_matrix_py(self, c_s_k_matrix):
-        γs_k_matrix = self.get_γs_k_matrix(c_s_k_matrix)                           # 1. c_k, u_l_k -> γ_k   (Definition)
-
-        γs_r_matrix = self.FT_k_2_r_matrix(γs_k_matrix) # γ_k        -> γ_r   (FT)     
-        # h_r_matrix  = np.exp(-self.βu_r_matrix)*(1 + γs_r_matrix + self.βu_l_r_matrix)    
-        # h_r_matrix  = np.where(h_r_matrix>self.h_max, self.h_max, h_r_matrix)
-        # h_k_matrix  = self.FT_r_2_k_matrix(h_r_matrix)
-        # Plug into HNC equation
-
-        new_c_s_r_matrix = -1 - γs_r_matrix + np.exp(-self.βu_r_matrix)*(1 + γs_r_matrix)#h_r_matrix - γs_r_matrix # 3. h_r, γ_r   -> c_s_r (Ornstein-Zernicke)
-        new_c_s_k_matrix = self.FT_r_2_k_matrix(new_c_s_r_matrix)
-        
-        return new_c_s_k_matrix
-
-    def HNC_newton_solve(self, **newton_kwargs):
-        self.newton_iters = 0
-        self.newton_succeed=False
-        def callback_func(x, residual):
-            # print("c_s_k: ", x.reshape(self.N_species, self.N_species, self.N_bins))
-            self.newton_iters +=1
-            self.c_s_k_matrix = x.reshape(self.N_species,self.N_species,self.N_bins)
-            self.set_all_matrices_from_csk(self.c_s_k_matrix)
-            self.u_ex_list.append(self.excess_energy_density())
-            self.h_r_matrix_list.append(self.h_r_matrix.copy())            
-            self.c_s_k_matrix_list.append(self.c_s_k_matrix.copy())
-            residual_norm = np.linalg.norm(residual)/np.sqrt(self.N_bins*self.N_species**2)
-            self.tot_err_list.append(residual_norm)
-            change = np.linalg.norm(self.c_s_k_matrix_list[-1] - self.c_s_k_matrix_list[-2]) / np.sqrt(self.N_bins*self.N_species**2)
-            
-            print("Iter: {0}, Newton residual norm: {1:.3e}, Change: {2:.3e} ".format(self.newton_iters, residual_norm, change))
-            
-
-        def f_to_min(c_s_k_flat):
-            c_s_k_matrix = c_s_k_flat.reshape(self.N_species, self.N_species, self.N_bins)
-            matrix_to_min = self.get_hnc_oz_matrix(c_s_k_matrix)
-            return matrix_to_min.flatten()
-
-        
-        # options={'jac_options':{'rdiff':rdiff, 'inner_m':10, 'method':'gmres','M':None} , 'maxiter':int(1e3)} 
-        # options={'jac_options':{'rdiff':rdiff} , 'maxiter':int(1e3)} 
-        # options={'jac_options':{'rdiff':rdiff, 'method':'gmres'} , 'maxiter':int(50)} 
-        # options={'maxfev':int(1e3),'maxiter':int(1e2)}
-        # sol = root(f_to_min, self.c_s_k_matrix, method=method, callback=callback_func, options=options, tol=1e-8)  
-        # sol1 = root(f_to_min, self.c_s_k_matrix, method='df-sane', callback=callback_func, tol=1e-2, options=options)  
-        # sol1 = root(f_to_min, self.c_s_k_matrix, method='anderson', callback=callback_func, tol=1e-2, options=options)  
-        # print("\ndf-sane: ", sol1.success, sol1.message)
-        # options={'jac_options':{'rdiff':rdiff, 'outer_k':1} , 'maxiter':int(num_iterations)} 
-        # sol2 = root(f_to_min, self.c_s_k_matrix, method='krylov' , callback=callback_func, tol=tol, options=options)  
-        # options={'eps':1e-6,'maxfev':100,'factor':0.1,'xtol':1e-3} 
-        sol2 = root(f_to_min, self.c_s_k_matrix, **newton_kwargs)#method='hybr' , tol=tol, options=options)  
-
-        self.c_s_k_matrix = sol2.x.reshape(self.N_species, self.N_species, self.N_bins)
-        self.c_k_matrix = self.c_s_k_matrix - self.βu_l_k_matrix
-        self.γs_k_matrix = self.get_γs_k_matrix(self.c_s_k_matrix)
-        self.γs_r_matrix = self.FT_k_2_r_matrix(self.γs_k_matrix)
-        self.h_r_matrix = -1 + np.exp(self.γs_r_matrix - self.βu_s_r_matrix)
-        self.βω_r_matrix = self.βu_s_r_matrix - self.γs_r_matrix   # potential of mean force
-        print("\nRoot Finder: ", sol2.success, sol2.message, "final err: {0:.3e}".format(self.total_err(self.c_s_k_matrix)))
-        if sol2.success:
-            self.newton_succeed=True
-        return sol2
-        
     # Solver
     def HNC_solve(self, num_iterations=1e3, tol=1e-6, iters_to_wait=1e2, iters_to_use=3, alpha_Ng = 1e-3 ,
         alpha_Picard = 0.1, alpha_oz = 0., iters_to_check=10 ,verbose=False, min_iters=20):
@@ -628,28 +511,17 @@ class Integral_Equation_Solver():
         self.h_r_matrix_list, self.c_s_k_matrix_list = [], []
         self.u_ex_list = []
         self.h_r_matrix_list.append(self.h_r_matrix.copy())            
-        self.c_s_k_matrix_list.append(self.c_s_k_matrix.copy())
-        initial_error = self.total_err(self.c_s_k_matrix)
+        self.γ_s_k_matrix_list.append(self.γ_s_k_matrix_list.copy())
+        initial_error = self.total_err(self.γ_s_k_matrix_list)
+
         print("0: Initial condition Total Error: {1:.3e}".format(iteration, initial_error))
         self.tot_err_list, self.hnc_err_list  = [initial_error], [0]
         while converged!=0:
             old_c_s_k_matrix = self.c_s_k_matrix.copy()
-            if iteration < iters_to_wait: #Picard at first
-                guess_c_s_k_matrix = self.guess_c_s_k_matrix(self.c_s_k_matrix)
-                self.c_s_k_matrix = self.Picard_c_s_k(self.c_s_k_matrix, guess_c_s_k_matrix, alpha=alpha_Picard )
-            elif iteration == iters_to_wait:
-                best_run_index = np.argmin(self.tot_err_list)
-                self.c_s_k_matrix = self.c_s_k_matrix_list[best_run_index]
-                print("Starting Ng loop, using best index so far: ", best_run_index)
-                self.h_r_matrix_list = self.h_r_matrix_list[:best_run_index]
-                self.c_s_k_matrix_list = self.c_s_k_matrix_list[:best_run_index]
-                self.u_ex_list = self.u_ex_list[:best_run_index]
-                self.tot_err_list = self.tot_err_list[:best_run_index]
-                iteration+=1
-                continue
-            else:
-                self.c_s_k_matrix = self.Ng_c_s_k(num_to_use=iters_to_use, alpha = alpha_Ng)
-
+            
+            guess_c_s_k_matrix = self.guess_c_s_k_matrix(self.c_s_k_matrix)
+            self.c_s_k_matrix = self.Picard_c_s_k(self.c_s_k_matrix, guess_c_s_k_matrix, alpha=alpha_Picard )
+        
             self.set_all_matrices_from_csk(self.c_s_k_matrix)
 
             self.h_r_matrix_list.append(self.h_r_matrix.copy())            

@@ -4,7 +4,7 @@ from atomic_forces.atomOFDFT.python.physics import ThomasFermi, FermiDirac
 import numpy as np
 from .constants import *
 
-def (ne):
+def Fermi_Energy(ne):
     E_F = 1/(2*m_e) * (3*π**2 * ne)**(2/3)
     return E_F
 
