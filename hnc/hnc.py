@@ -345,6 +345,7 @@ class Integral_Equation_Solver():
         βω_r_matrix = self.βu_s_r_matrix - γs_r_matrix   # potential of mean force    
         h_r_matrix = γs_r_matrix + c_s_r_matrix
         h_r_matrix = np.where(h_r_matrix>self.h_max, self.h_max, h_r_matrix)
+        h_r_matrix = np.where(h_r_matrix<-1, -1, h_r_matrix)
         h_k_matrix = self.FT_r_2_k_matrix(h_r_matrix)
 
         return c_k_matrix ,c_s_r_matrix ,c_r_matrix ,γs_k_matrix ,γs_r_matrix ,βω_r_matrix ,h_r_matrix ,h_r_matrix ,h_k_matrix

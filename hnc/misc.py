@@ -65,7 +65,7 @@ def P_Ideal_Fermi_Gas(Te, ne):
     η = find_η(Te, ne)
     Ithreehalf = FermiDirac.Ithreehalf(η)
     Θ = Degeneracy_Parameter(Te, ne)
-    P = Te * ne * Θ**(3/2) * Ithreehalf
+    P = Te * ne * Θ**(3/2) * Ithreehalf # Goes to 2/5 EF ne
     return P
 
 def E_Ideal_Fermi_Gas(Te, ne):
@@ -75,7 +75,7 @@ def E_Ideal_Fermi_Gas(Te, ne):
     η = find_η(Te, ne)
     Ithreehalf = FermiDirac.Ithreehalf(η)
     Θ = Degeneracy_Parameter(Te, ne)
-    E = 3/2 * Te * Θ**(3/2) * Ithreehalf
+    E = 3/2 * Te * Θ**(3/2) * Ithreehalf # Goes to 3/5 EF
     return E
 
 
