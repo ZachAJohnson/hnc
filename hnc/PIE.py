@@ -70,7 +70,7 @@ class Plasma_of_Ions_and_Electrons():
 			βvei = qsp.βvei(r_array)
 		
 		if self.find_βuee==True:
-			βvee = self.βP_ee + qsp.βvee(r_array)-qsp.βv_Pauli(r_array, qsp.Λee)
+			βvee = self.βP_ee + qsp.βvee(r_array)-qsp.βv_Pauli(r_array)
 		else:
 			βvee = qsp.βvee(r_array)
 		
@@ -137,8 +137,13 @@ class Plasma_of_Ions_and_Electrons():
 	
 	def get_βPauli(self):
 		# Define HNC purely for FT
-		Nbins = 10000
-		dense_hnc = IET_solver(1, 1, 1,1,1, N_bins=Nbins, R_max=1000)
+		Nbins = 100000
+		if self.qsp.Te/self.qsp.E_F < 1:
+			R_max = 10000
+		else:
+			R_max = 100
+
+		dense_hnc = IET_solver(1, 1, 1,1,1, N_bins=Nbins, R_max=R_max)
 
 		# Chemical potential
 		η = find_η(self.qsp.Te, self.qsp.ne )
@@ -190,15 +195,15 @@ class Plasma_of_Ions_and_Electrons():
 		# What pauli potential to use
 		r_array = self.jellium_hnc.r_array
 		if self.find_βuee==True:
-			βv_ee_P = self.βP_ee# + self.qsp.βvee(r_array)-self.qsp.βv_Pauli(r_array, self.qsp.Λee)
+			βv_ee_P = self.βP_ee# + self.qsp.βvee(r_array)-self.qsp.βv_Pauli(r_array)
 		else:
-			βv_ee_P = self.qsp.βv_Pauli(r_array, self.qsp.Λee)
+			βv_ee_P = self.qsp.βv_Pauli(r_array)
 			
 		# ideal fermi gas or not
 		if ideal==True:
 			βv_ee = βv_ee_P
 		else:
-			βv_ee = βv_ee_P + self.qsp.βvee(r_array) - self.qsp.βv_Pauli(r_array, self.qsp.Λee)
+			βv_ee = βv_ee_P + self.qsp.βvee(r_array) - self.qsp.βv_Pauli(r_array)
 		
 		self.jellium_hnc.set_βu_matrix(np.array([[  βv_ee  ]]))
 		

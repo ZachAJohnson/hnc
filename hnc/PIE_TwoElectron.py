@@ -68,8 +68,8 @@ class Plasma_of_Ions_and_Electrons():
 			βv_ei = qsp.βvei(r_array)
 		
 		if self.find_βuee==True:
-			βv_uu = self.βP_uu + self.qsp.βvee(r_array) - qsp.βv_Pauli(r_array, qsp.Λee)
-			βv_ud = self.qsp.βvee(r_array) - qsp.βv_Pauli(r_array, qsp.Λee)
+			βv_uu = self.βP_uu + self.qsp.βvee(r_array) - qsp.βv_Pauli(r_array)
+			βv_ud = self.qsp.βvee(r_array) - qsp.βv_Pauli(r_array)
 		else:
 			βv_uu = qsp.βvee
 
@@ -154,7 +154,11 @@ class Plasma_of_Ions_and_Electrons():
 		if self.n_up_fraction != 0.5:
 			print("WARNING: n_up not equal to n_down not implemented for βPauli.")
 		Nbins = 100000
-		dense_hnc = IET_solver(1, 1, 1,1,1, N_bins=Nbins, R_max=10000)
+		if self.qsp.Te/qsp.E_f < 1:
+				R_max = 10000
+		else:
+				R_max = 100
+		dense_hnc = IET_solver(1, 1, 1,1,1, N_bins=Nbins, R_max=R_max)
 
 		# Chemical potential
 		η = find_η(self.qsp.Te, self.qsp.ne )
@@ -202,18 +206,18 @@ class Plasma_of_Ions_and_Electrons():
 
 		r_array = self.jellium_hnc.r_array
 		if self.find_βuee==True:
-			βv_uu_P = self.βP_uu #+ self.βvee(r_array) - qsp.βv_Pauli(r_array, qsp.Λee)
-			βv_ud_P = np.zeros_like(r_array)# - qsp.βv_Pauli(r_array, qsp.Λee)
+			βv_uu_P = self.βP_uu #+ self.βvee(r_array) - qsp.βv_Pauli(r_array)
+			βv_ud_P = np.zeros_like(r_array)# - qsp.βv_Pauli(r_array)
 		else:
-			βv_uu_P = qsp.βv_Pauli(r_array, self.qsp.Λee)
-			βv_ud_P = qsp.βv_Pauli(r_array, self.qsp.Λee)
+			βv_uu_P = qsp.βv_Pauli(r_array)
+			βv_ud_P = qsp.βv_Pauli(r_array)
 		
 		if ideal==True:
 			βv_uu = βv_uu_P
 			βv_ud = βv_ud_P
 		else:
-			βv_uu = βv_uu_P + self.qsp.βvee(r_array) - self.qsp.βv_Pauli(r_array, self.qsp.Λee)
-			βv_ud = βv_ud_P + self.qsp.βvee(r_array) - self.qsp.βv_Pauli(r_array, self.qsp.Λee)
+			βv_uu = βv_uu_P + self.qsp.βvee(r_array) - self.qsp.βv_Pauli(r_array)
+			βv_ud = βv_ud_P + self.qsp.βvee(r_array) - self.qsp.βv_Pauli(r_array)
 
 
 		self.jellium_hnc.set_βu_matrix(np.array([[  βv_uu, βv_ud  ],

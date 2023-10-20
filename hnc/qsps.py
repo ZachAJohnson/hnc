@@ -128,16 +128,22 @@ class Quantum_Statistical_Potentials():
     def βv_Improved_Kelbg(self, Γ, r, Λ, γ=1): # Checked exactly for Λ defined by Λ_ij = hbar/sqrt(  2 π T_ij μ_ij )
         return Γ/r*( 1 - np.exp(-r**2/(π*Λ**2)) + r/(Λ*γ) * erfc( γ*r/(Λ*np.sqrt(π)) )  )
 
-    def βv_Pauli(self, r, Λ):
+    def βv_Pauli(self, r, type='Lado'):
         #Sarkas
-        # return  np.log(2) * np.exp(-4*π* r**2 /( Λe**2))
-        #return -np.log(1 - 0.5*np.exp(-r**2/(2*π*Λe**2)) )
-        return np.log(2)*np.exp(-r**2/(π*np.log(2)*Λ**2))
-        # return np.log(2)*np.exp(-np.log(2)*r**2/(π*Λ**2))
+        if type=='ideal':# Adapted eq. 15 of Jones & Murillo from Uhlenbeck and Gropper (UG
+            return -np.log(1 - 0.5*np.exp(-r**2/(π*self.Λee**2)) )         
+
+        if type=='Lado': # Adapted eq. 44/45 of Jones & Murillo from Lado
+            τ = self.Te/self.E_F
+            a1, a2, a3 = 0.2975, 6.090, 1.541
+            b1, b2, b3, b4 = 0.0842, 0.1027, 1.096, 1.359
+            A = 1 + a1/(1+a2*τ**a3)
+            B = 1 + b1*np.exp(-b2*τ**b3)/τ**b4
+            return -np.log(1-0.5*A*np.exp(-B*r**2/(π*self.Λee**2))) 
        
     ######### Build Actual QSP's
     def βvee(self, r):
-        return self.βv_Kelbg(self.Γee,r, self.Λee) + self.βv_Pauli(r,self.Λee)
+        return self.βv_Kelbg(self.Γee,r, self.Λee) + self.βv_Pauli(r)
 
     def βvei(self, r):
         """
