@@ -12,8 +12,6 @@ from pandas import read_csv
 from scipy.optimize import minimize
 from scipy.linalg import solve_sylvester, solve_continuous_lyapunov
 
-from numba import jit, njit
-
 from .constants import *
 
 
