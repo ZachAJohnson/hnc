@@ -154,7 +154,7 @@ class Plasma_of_Ions_and_Electrons():
 		if self.n_up_fraction != 0.5:
 			print("WARNING: n_up not equal to n_down not implemented for βPauli.")
 		Nbins = 100000
-		if self.qsp.Te/qsp.E_f < 1:
+		if self.qsp.Te/self.qsp.E_F < 1:
 				R_max = 10000
 		else:
 				R_max = 100
@@ -199,7 +199,7 @@ class Plasma_of_Ions_and_Electrons():
 		self.ocp_hnc.c_s_k_matrix *= 0
 		self.ocp_hnc.HNC_solve(**self.hnc_solve_options)
 
-	def run_jellium_hnc(self, ideal=False, c_s_k_guess = None):
+	def make_jellium_hnc(self, ideal=False, c_s_k_guess = None):
 		self.jellium_hnc = IET_solver(2, self.qsp.Γee*np.ones((2,2)),
 		 [self.n_up_fraction * self.Zbar*3/(4*π), self.n_down_fraction * self.Zbar*3/(4*π) ], self.qsp.Te_c*np.ones((2,2)), [m_e,m_e], **self.hnc_options)
 		self.jellium_hnc.c_s_k_matrix *= 0
@@ -228,9 +228,11 @@ class Plasma_of_Ions_and_Electrons():
 		else:
 			self.jellium_hnc.c_s_k_matrix *= 0 
 
-		self.jellium_hnc.HNC_solve(**self.hnc_solve_options)
 
-	   
+	def run_jellium_hnc(self, **kwargs):
+		self.make_jellium_hnc(**kwargs)
+		self.jellium_hnc.HNC_solve(**self.hnc_solve_options)		
+
 	def run_hnc(self, hnc=None, qsp=None, c_s_k_guess=None):
 		if hnc==None and qsp==None:
 			hnc = self.hnc

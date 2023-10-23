@@ -12,6 +12,8 @@ from pandas import read_csv
 from scipy.optimize import minimize
 from scipy.linalg import solve_sylvester, solve_continuous_lyapunov
 
+from numba import jit, njit
+
 from .constants import *
 
 
@@ -176,20 +178,23 @@ class Integral_Equation_Solver():
         self.fact_k_2_r = self.del_k / (4. * np.pi**2)
         self.dimless_dens = 3. / (4 * np.pi)
 
+    
     def FT_r_2_k(self, input_array):
         from_dst = self.fact_r_2_k * fftpack.dst(self.r_array * input_array, type=self.dst_type)
         return from_dst / self.k_array
 
+    
     def FT_k_2_r(self, input_array):
         from_idst = self.fact_k_2_r * fftpack.idst(self.k_array * input_array, type=self.dst_type)
         return from_idst / self.r_array
 
+    
     def FT_r_2_k_matrix(self, f_r):
         N = f_r.shape[0]
         f_k = np.zeros((N, N, self.N_bins))
         f_k[:,:] = self.FT_r_2_k(f_r[:,:])
         return f_k
-
+    
     def FT_k_2_r_matrix(self, f_k):
         N = f_k.shape[0]
         f_r = np.zeros((N, N, self.N_bins))
