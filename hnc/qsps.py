@@ -60,8 +60,8 @@ class Quantum_Statistical_Potentials():
         # self.Tq  = self.E_F/(1.594 - 0.3160*np.sqrt(self.re) + 0.0240*self.re) #DMC
         # self.Tq  = self.E_F/(1.3251 - 0.1779*np.sqrt(self.re) + 0.0*self.re) #VMC
         # self.Te_c  = self.make_Te(self.Te, self.Tq)
-        self.Te_c = P_Ideal_Fermi_Gas(self.Te, self.ne)/self.ne # Matches free Fermi gas pressure exactly
-        # self.Te_c = self.Te 
+        # self.Te_c = P_Ideal_Fermi_Gas(self.Te, self.ne)/self.ne # Matches free Fermi gas pressure exactly
+        self.Te_c = self.Te 
 
         self.lambda_TF = np.sqrt( self.Te / (4*π*self.ne)  )
 

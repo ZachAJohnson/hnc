@@ -71,7 +71,8 @@ class Plasma_of_Ions_and_Electrons():
 			βv_uu = self.βP_uu + self.qsp.βvee(r_array) - qsp.βv_Pauli(r_array)
 			βv_ud = self.qsp.βvee(r_array) - qsp.βv_Pauli(r_array)
 		else:
-			βv_uu = qsp.βvee
+			βv_uu = self.βP_uu + self.qsp.βvee(r_array) - qsp.βv_Pauli(r_array)
+			βv_ud = self.qsp.βvee(r_array) - qsp.βv_Pauli(r_array)
 
 		βv_ii = qsp.βvii(r_array)
 		βu_r_matrix = np.array([[βv_ii, βv_ei, βv_ei],
