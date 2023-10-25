@@ -17,7 +17,7 @@ class Quantum_Statistical_Potentials():
     Class defining classical mapping potentials for electron-ion systems where the electrons are partially degenerate.  
     """
 
-    def __init__(self, Z, A, Zstar, Te, Ti, ri, ne, which_Tij='thermal', r_c = 3/5, verbose= False):
+    def __init__(self, Z, A, Zstar, Te, Ti, ri, ne, which_Tij='thermal', r_c = 3/5, verbose= False, Te_c_type = 'Fermi', custom_Te_c = None):
         self.Z = Z
         self.A = A
         self.Zstar = Zstar
@@ -27,6 +27,8 @@ class Quantum_Statistical_Potentials():
         self.ne = ne
         self.r_c = r_c
         self.which_Tij = which_Tij 
+        self.Te_c_type = Te_c_type
+        self.custom_Te_c = custom_Te_c
 
         self.initialize_physics(Z, A, Zstar, Te, Ti, ri, ne, verbose=verbose)
 
@@ -37,15 +39,6 @@ class Quantum_Statistical_Potentials():
         self.ni = n_from_rs(ri)
         self.m_i = m_p*self.A
         
-        # Actual Temperatures and inverse temperatures
-        self.βi  = 1/self.Ti
-        self.βe  = 1/self.Te
-        if self.which_Tij=='thermal':
-            self.Tie = self.Tei_thermal(Te, Ti)
-        elif self.which_Tij=='geometric':
-            self.Tie = self.Tei_geometric(Te, Ti)
-        self.βie = 1/self.Tie
-
         self.ne = ne#self.Zstar*self.ni
         self.re = rs_from_n(self.ne)
 
@@ -55,28 +48,41 @@ class Quantum_Statistical_Potentials():
         self.θ   = self.Te/self.E_F
 
         #Construct effective electron temperatures. https://journals-aps-org.proxy.lib.umich.edu/prl/pdf/10.1103/PhysRevLett.84.959
-        # self.Tq  = 2/5*self.E_F #EF
-        # self.Tq  = self.E_F #EF
-        # self.Tq  = self.E_F/(1.594 - 0.3160*np.sqrt(self.re) + 0.0240*self.re) #DMC
-        # self.Tq  = self.E_F/(1.3251 - 0.1779*np.sqrt(self.re) + 0.0*self.re) #VMC
-        # self.Te_c  = self.make_Te(self.Te, self.Tq)
-        # self.Te_c = P_Ideal_Fermi_Gas(self.Te, self.ne)/self.ne # Matches free Fermi gas pressure exactly
-        self.Te_c = self.Te 
+        if self.Te_c_type=='DMC':
+            self.Tq  = self.E_F/(1.594 - 0.3160*np.sqrt(self.re) + 0.0240*self.re) #DMC
+            self.Te_c  = self.make_Te(self.Te, self.Tq)
+        elif self.Te_c_type=='VMC':
+            self.Tq  = self.E_F/(1.3251 - 0.1779*np.sqrt(self.re) + 0.0*self.re) #VMC
+            self.Te_c  = self.make_Te(self.Te, self.Tq)
+        elif self.Te_c_type=='Fermi':
+            self.Te_c = P_Ideal_Fermi_Gas(self.Te, self.ne)/self.ne # Matches free Fermi gas pressure exactly    
+        elif self.Te_c_type=='classical':   
+            self.Te_c = self.Te
+        elif self.Te_c_type=='custom':
+            self.Te_c = self.custom_Te_c
 
         self.lambda_TF = np.sqrt( self.Te / (4*π*self.ne)  )
 
         if self.which_Tij=='thermal':
+            self.Tie = self.Tei_thermal(Te, Ti)
             self.Tie_c = self.Tei_thermal(self.Te_c, self.Ti)
         elif self.which_Tij=='geometric':
+            self.Tie = self.Tei_geometric(Te, Ti)
             self.Tie_c = self.Tei_geometric(self.Te_c, self.Ti)
 
+        # Inverse temperatures
+        self.βi  = 1/self.Ti
+        self.βe  = 1/self.Te
+
+        self.βie = 1/self.Tie
         self.βe_c  = 1/self.Te_c
         self.βie_c = 1/self.Tie_c 
+
         self.Tij = np.array([[self.Ti, self.Tie_c],
                               [self.Tie_c, self.Te_c]])
         self.μ = self.m_i*m_e/(m_e+self.m_i)
-        self.mij = np.array([[self.m_i, self.μ],
-                              [self.μ, m_e]])
+        self.mij = np.array([[self.m_i, 2*self.μ],
+                              [2*self.μ, m_e]])
 
         self.Λee  = 1/np.sqrt(2*π*(m_e/2)*self.Te_c )/self.ri 
         self.Λei  = 1/np.sqrt(2*π*self.μ*self.Tie_c )/self.ri
