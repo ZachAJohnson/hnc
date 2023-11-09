@@ -1,0 +1,15 @@
+10:46
+
+slide 0- CMSE + logo
+slide 7- Red/blue, 1/r^2 line
+
+
+_________________________________
+Chris Talk
+Slide 2- emphasize dense limit
+Slide 5- Point out if temperature varies with position, this is the form it takes
+			 - is this not literally what is done
+Slide 10-fonts
+				-clear what approximation your in
+Slide 11-why n oscillating?
+Slide 14-clear what X is?? Motivate

@@ -191,7 +191,9 @@ class Plasma_of_Ions_and_Electrons():
 		# Approximate with HNC
 		βP_uu = h_r - c_r - np.log(h_r+1)
 
-		self.βP_uu = interp1d(dense_hnc.r_array, βP_uu, kind='linear', bounds_error=False, fill_value = (βP_uu[0], 0) )(self.hnc.r_array)
+
+		self.βP_uu_func = interp1d(dense_hnc.r_array, βP_uu, kind='linear', bounds_error=False, fill_value = (βP_uu[0], 0) )
+		self.βP_uu = self.βP_uu_func(self.hnc.r_array)
 
 
 	# Solving HNC system of equations
@@ -234,7 +236,7 @@ class Plasma_of_Ions_and_Electrons():
 		self.make_jellium_hnc(**kwargs)
 		self.jellium_hnc.HNC_solve(**self.hnc_solve_options)		
 
-	def run_hnc(self, hnc=None, qsp=None, c_s_k_guess=None):
+	def run_hnc(self, hnc=None, qsp=None, c_s_k_guess=None, newton = True):
 		if hnc==None and qsp==None:
 			hnc = self.hnc
 			qsp = self.qsp
@@ -247,11 +249,14 @@ class Plasma_of_Ions_and_Electrons():
 		converged = hnc.HNC_solve(**self.hnc_solve_options)
 
 		hnc.invert_HNC_OZ([1])
-		
-		if converged!=0 and hnc.final_Picard_err < self.Picard_max_err:
+
+		if newton==False:
+			pass
+		elif converged!=0 and hnc.final_Picard_err < self.Picard_max_err:
 			hnc.HNC_newton_solve( **self.root_options)
 		elif hnc.final_Picard_err > self.Picard_max_err:
 			print("QUIT: Picard Err too high. Newton assumed not to converge. Try better initial condition or smaller α.")
+
 
 		hnc.Heff = self.get_effective_ion_H(hnc, qsp)
 		hnc.Ueff, hnc.Peff = self.get_effective_ion_U_P(hnc, qsp)
