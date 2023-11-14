@@ -18,7 +18,7 @@ class Plasma_of_Ions_and_Electrons():
 
 		self.hnc_options = { 'N_bins' :500, 'R_max':5, 'oz_method':'svt'}
 		self.βu_options  = {'add_bridge':False, 'bridge':'ocp', 'pseudopotential':True}
-		self.qsp_options = {'r_c':0.6,'which_Tij':'thermal'}
+		self.qsp_options = {'r_c':0.6,'which_Tij':'thermal','Te_c_type':'Fermi'}
 		self.hnc_solve_options = { 'alpha_Picard': 0.5, 'tol':1e-8, 'alpha_Ng':0, 
                        'iters_to_wait':1e4, 'num_iterations':1e3, 'verbose':False}
 		self.root_options = {'method':'hybr', 'options': {'eps':1e-6,'maxfev':10000,'factor':100,'xtol':1e-12}}

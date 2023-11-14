@@ -377,7 +377,6 @@ class Integral_Equation_Solver():
         next_c_s_k_n = np.array([ self.guess_c_s_k_matrix(c_s_k_n) for c_s_k_n in actual_c_s_k_n]) # g_n
         # print(next_c_s_k_n.shape)
         dn_list = next_c_s_k_n - actual_c_s_k_n # d_n = g_n-f_n , 0 iff converged
-        print("|d_n|^2 = ", [np.linalg.norm(dn) for dn in dn_list]  )
 
         Δd_list = dn_list[0] - dn_list[1:] #  = [d_{01}, d_{02}, ... ]
         Δd_flattened_list = np.array([Δd.flatten() for Δd in Δd_list]) # flatten the species matrix components
@@ -388,50 +387,9 @@ class Integral_Equation_Solver():
 
         best_αs_list = np.linalg.inv(A_sum_matrix) @ b_vec # = [c_1, c_2]
 
-        # Try by each species combination
-        # best_αs_matrix = np.zeros((self.N_species, self.N_species, num_to_use-1))
-        # actual_c_s_k_n = np.array(self.c_s_k_matrix_list)[-num_to_use:][::-1]# reverse so first index is the actual c_s_k
-        # next_c_s_k_n = np.array([ self.guess_c_s_k_matrix(c_s_k_n) for c_s_k_n in actual_c_s_k_n])
-                
-        # for i in range(self.N_species):
-        #     for j in range(self.N_species):
-        #         # print(next_c_s_k_n.shape)
-        #         dn_list = next_c_s_k_n[:,i,j] - actual_c_s_k_n[:,i,j]
-        #         Δd_list = np.array(dn_list[0] - dn_list[1:])
-        #         # Δd_flattened_list = np.array([Δd for Δd in Δd_list])
-                
-        #         A_sum_matrix = np.sum(Δd_list[:,np.newaxis]*Δd_list[np.newaxis,:] ,axis = (2) )
-
-        #         b_vec = np.sum(  dn_list[0] * Δd_list, axis=(1)  )
-        #         best_αs_matrix[i,j] = np.linalg.inv(A_sum_matrix) @ b_vec
-        # print(" α matrix, ", best_αs_matrix)
-
-                
-
-
-        # αs_size =  np.linalg.norm(best_αs_list)/np.sqrt(len(best_αs_list))
-        # best_αs_list =  best_αs_list * alpha#/αs_size
-        
-        # def c_err_1(αs):
-        #     c_s = next_c_s_k_n[-1]*(1-np.sum(αs)) + np.sum(αs[:,np.newaxis,np.newaxis,np.newaxis]*next_c_s_k_n[:-1], axis=0)
-        #     tot_err = self.total_err(c_s)
-        #     # ΔNg     = np.linalg.norm( dn_list[-1] - np.sum(αs[1:,np.newaxis,np.newaxis,np.newaxis]*Δd_list, axis=0) )
-        #     # print("HNC αs: {0}, tot_err: {1:.5e}, Ng_err: {2:.5e} ".format(np.array(αs), tot_err, ΔNg))
-        #     # print("HNC αs: {0}, tot_err: {1:.5e}".format(np.array(αs), tot_err))
-        #     return tot_err
-        
-        # method='L-BFGS-B'
-        # method='SLSQP'
-        # method='Nelder-Mead'
-        # tol=1e-6
-        # α_bounds = [(0,1)]*len(best_αs_list)
-        # res = minimize(c_err_1 , best_αs_list, bounds=α_bounds, tol=tol, options={'maxiter':int(1e3)}, method=method) 
-        # αs = res.x
         αs = best_αs_list
         αs =  np.array([(1-np.sum(αs)), *αs]) # = [(1-c_1 -c_2..., c_1, c_2, ...)]
-        print(" αs: ", αs)
-        # print(" Linear αs guess: ", best_αs_list)
-        # print(" Result of αs minimization:", res.x, res.success, res.message)
+    
         self.Ng_guess_c_s_k = np.sum(αs[:,np.newaxis,np.newaxis,np.newaxis]*next_c_s_k_n, axis=0)
         # new_c_s_k = self.Picard_c_s_k(self.c_s_k_matrix, self.Ng_guess_c_s_k, alpha=alpha)
         new_c_s_k = self.Ng_guess_c_s_k
