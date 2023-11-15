@@ -113,7 +113,7 @@ class Quantum_Statistical_Potentials():
         return Te_c
 
     def get_κ(self):
-        kTF = np.sqrt(  4*π*self.ne  /self.Te_c  )
+        kTF = np.sqrt(  4*π*self.ne**2  /P_Ideal_Fermi_Gas(self.Te_c, self.ne)  )
         return kTF*self.ri
 
     def Tei_geometric(self, Te, Ti): # Returns geometric mean of two temperatures
@@ -170,28 +170,9 @@ class Quantum_Statistical_Potentials():
         βvei_pseudopotential = Γ*one_over_r_cutoff
         return βvei_pseudopotential * ( 1 -  np.exp(-r/Λ) )
 
-    # def βvei_atomic(self, r, core_height=1):
-    #     r_c  = self.r_c #3/5 r_s in linear n_b(r) model
-    #     Λ, Γ = self.Λei, self.Γei
-    #     inside_core = np.heaviside(r_c - r,0.5)
-    #     outside_core = np.heaviside(r - r_c, 0.5)
-    #     one_over_r_cutoff = inside_core*core_height  + outside_core*r_c/r  
-    #     βvei_pseudopotential = one_over_r_cutoff
-    #     return -2*βvei_pseudopotential * ( 1 -  np.exp(-r/Λ) )
-
-    # def βvei_atomic(self, r, core_height=1):
-    #     r_c  = self.r_c #3/5 r_s in linear n_b(r) model
-    #     Λ, Γ = self.Λei, self.Γei
-    #     Λ_atomic = np.sqrt(r_c**2 + Λ**2)
-        
-    #     unnormalized_βvei = 1/r * ( 1 -  np.exp(-r/Λ_atomic) )
-    #     unnormalized_βvei_at_0 = 1/Λ_atomic
-    #     correction_factor_from_h_c = 2
-    #     return correction_factor_from_h_c *(-unnormalized_βvei  * 1/unnormalized_βvei_at_0)
-
     def βvii(self, r):
         return self.Γii/r 
 
     def βv_Yukawa(self, r):
-                return self.Γii/r * np.exp(-r*self.ri/self.lambda_TF)
+                return self.Γii/r * np.exp(-r*self.get_κ())
         

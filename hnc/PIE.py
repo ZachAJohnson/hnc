@@ -179,14 +179,18 @@ class Plasma_of_Ions_and_Electrons():
 		self.βP_ee_func = interp1d(dense_hnc.r_array, βP_ee, kind='linear', bounds_error=False, fill_value = (βP_ee[0], 0) )
 		self.βP_ee = self.βP_ee_func(self.hnc.r_array)
 
-
-
-
 	# Solving HNC system of equations
 	def run_ocp_hnc(self):
 		self.ocp_hnc = IET_solver(1, self.qsp.Γ_matrix[:1,:1], np.array([3/(4*π)]), np.array([[self.qsp.Ti]]), np.array([self.qsp.m_i]), **self.hnc_options)
 		self.ocp_hnc.c_s_k_matrix *= 0
 		self.ocp_hnc.HNC_solve(**self.hnc_solve_options)
+
+	# Solving HNC system of equations
+	def run_yukawa_hnc(self):
+		self.yuk_hnc = IET_solver(1, self.qsp.Γ_matrix[:1,:1], np.array([3/(4*π)]), np.array([[self.qsp.Ti]]), np.array([self.qsp.m_i]), kappa = self.qsp.get_κ(), **self.hnc_options)
+		self.yuk_hnc.c_s_k_matrix *= 0
+		self.yuk_hnc.initialize_βu_matrix()
+		self.yuk_hnc.HNC_solve(**self.hnc_solve_options)
 
 	def run_jellium_hnc(self, ideal=True, c_s_k_guess = None):
 		self.jellium_hnc = IET_solver(1, self.qsp.Γ_matrix[-1:,-1:], np.array([self.Zbar*3/(4*π)]), np.array([[self.qsp.Te_c]]), np.array([m_e]), **self.hnc_options)
