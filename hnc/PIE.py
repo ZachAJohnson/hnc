@@ -220,7 +220,7 @@ class Plasma_of_Ions_and_Electrons():
 		# run
 		self.jellium_hnc.HNC_solve(**self.hnc_solve_options)
 
-	def run_hnc(self, hnc=None, qsp=None, c_s_k_guess=None, newton=True):
+	def run_hnc(self, hnc=None, qsp=None, c_s_k_guess=None, newton=False):
 		if hnc==None and qsp==None:
 			hnc = self.hnc
 			qsp = self.qsp
@@ -241,11 +241,17 @@ class Plasma_of_Ions_and_Electrons():
 		elif hnc.final_Picard_err > self.Picard_max_err:
 			print("QUIT: Picard Err too high. Newton assumed not to converge. Try better initial condition or smaller α.")
 
-		hnc.Heff = self.get_effective_ion_H(hnc, qsp)
-		hnc.Ueff, hnc.Peff = self.get_effective_ion_U_P(hnc, qsp)
-		hnc.u_energy_density = hnc.total_energy_density()/self.qsp.ri**3 
-		hnc.Pressure = hnc.total_pressure()/self.qsp.ri**3 
-
+		# hnc.Heff = self.get_effective_ion_H(hnc, qsp)
+		# hnc.Ueff, hnc.Peff = self.get_effective_ion_U_P(hnc, qsp)
+		# hnc.u_energy_density = hnc.total_energy_density()/self.qsp.ri**3 
+		# hnc.Pressure = hnc.total_pressure()/self.qsp.ri**3 
+		hnc.invert_HNC_OZ([1]) # make effective ion plasma
+		                        
+		if self.βu_options['add_bridge']:
+			if self.βu_options['bridge']=='ocp':
+				self.βueff_r_matrix_with_B = np.array([[hnc.βueff_r_matrix[0,0] + IET_solver.Bridge_function_OCP(hnc.r_array, qsp.Γii)]])
+			elif self.βu_options['bridge']=='yukawa':
+				self.βueff_r_matrix_with_B = np.array([[hnc.βueff_r_matrix[0,0] + IET_solver.Bridge_function_Yukawa(hnc.r_array, qsp.Γii, qsp.get_κ())]])
 
 	def get_effective_ion_U_P(self, hnc, qsp):
 	    r, dr = qsp.ri*hnc.r_array, qsp.ri*hnc.del_r
