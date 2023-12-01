@@ -17,10 +17,10 @@ class Quantum_Statistical_Potentials():
     Class defining classical mapping potentials for electron-ion systems where the electrons are partially degenerate.  
     """
 
-    def __init__(self, Z, A, Zstar, Te, Ti, ri, ne, which_Tij='thermal', r_c = 3/5, verbose= False, Te_c_type = 'Fermi', custom_Te_c = None):
+    def __init__(self, Z, A, Zbar, Te, Ti, ri, ne, which_Tij='thermal', r_c = 3/5, verbose= False, Te_c_type = 'Fermi', custom_Te_c = None):
         self.Z = Z
         self.A = A
-        self.Zstar = Zstar
+        self.Zbar = Zbar
         self.Te = Te
         self.Ti = Ti
         self.ri = ri
@@ -30,16 +30,16 @@ class Quantum_Statistical_Potentials():
         self.Te_c_type = Te_c_type
         self.custom_Te_c = custom_Te_c
 
-        self.initialize_physics(Z, A, Zstar, Te, Ti, ri, ne, verbose=verbose)
+        self.initialize_physics(Z, A, Zbar, Te, Ti, ri, ne, verbose=verbose)
 
-    def initialize_physics(self, Z, A, Zstar, Te, Ti, ri, ne, verbose=False):
+    def initialize_physics(self, Z, A, Zbar, Te, Ti, ri, ne, verbose=False):
         # [AU]
 
         self.ri = ri
         self.ni = n_from_rs(ri)
         self.m_i = m_p*self.A
         
-        self.ne = ne#self.Zstar*self.ni
+        self.ne = ne#self.Zbar*self.ni
         self.re = rs_from_n(self.ne)
 
         self.E_F = 1/(2*m_e) * (3*π**2 * self.ne)**(2/3)
@@ -91,8 +91,8 @@ class Quantum_Statistical_Potentials():
         # self.Λei  = 1/np.sqrt(2*self.μ*self.Tie_c )/self.ri #Bredow         
         
         self.Γee =  self.βe_c/self.ri 
-        self.Γei = -self.Zstar*self.βie_c/self.ri
-        self.Γii =  self.Zstar**2*self.βi/self.ri 
+        self.Γei = -self.Zbar*self.βie_c/self.ri
+        self.Γii =  self.Zbar**2*self.βi/self.ri 
 
         self.Γ_matrix = np.array(  [[self.Γii,  self.Γei],
                                     [self.Γei,  self.Γee]])

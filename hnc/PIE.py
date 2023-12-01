@@ -182,13 +182,39 @@ class Plasma_of_Ions_and_Electrons():
 	# Solving HNC system of equations
 	def run_ocp_hnc(self):
 		self.ocp_hnc = IET_solver(1, self.qsp.Γ_matrix[:1,:1], np.array([3/(4*π)]), np.array([[self.qsp.Ti]]), np.array([self.qsp.m_i]), **self.hnc_options)
+
+		pseudopotential, add_bridge, bridge = self.βu_options[ 'pseudopotential' ], self.βu_options['add_bridge'], self.βu_options['bridge']
+
+		βvii = self.qsp.βvii(self.ocp_hnc.r_array)
+		βu_r_matrix = np.array([[βvii]])
+		if add_bridge:
+			if bridge=='ocp':
+				βu_r_matrix[0,0] = βu_r_matrix[0,0] - IET_solver.Bridge_function_OCP(self.ocp_hnc.r_array, self.qsp.Γii)
+			elif bridge=='yukawa':
+				βu_r_matrix[0,0] = βu_r_matrix[0,0] - IET_solver.Bridge_function_Yukawa(self.ocp_hnc.r_array, self.qsp.Γii, self.qsp.get_κ())
+		
+		self.ocp_hnc.set_βu_matrix(βu_r_matrix)
+		self.ocp_hnc.initialize_c_k()
+		self.ocp_hnc.set_C_matrix()
 		self.ocp_hnc.c_s_k_matrix *= 0
 		self.ocp_hnc.HNC_solve(**self.hnc_solve_options)
 
 	# Solving HNC system of equations
 	def run_yukawa_hnc(self):
 		self.yuk_hnc = IET_solver(1, self.qsp.Γ_matrix[:1,:1], np.array([3/(4*π)]), np.array([[self.qsp.Ti]]), np.array([self.qsp.m_i]), kappa = self.qsp.get_κ(), **self.hnc_options)
-		self.yuk_hnc.c_s_k_matrix *= 0
+
+		pseudopotential, add_bridge, bridge = self.βu_options[ 'pseudopotential' ], self.βu_options['add_bridge'], self.βu_options['bridge']
+
+		βu_r_matrix = self.yuk_hnc.βu_r_matrix.copy()
+		if add_bridge:
+			if bridge=='ocp':
+				βu_r_matrix[0,0] = βu_r_matrix[0,0] - IET_solver.Bridge_function_OCP(self.yuk_hnc.r_array, self.qsp.Γii)
+			elif bridge=='yukawa':
+				βu_r_matrix[0,0] = βu_r_matrix[0,0] - IET_solver.Bridge_function_Yukawa(self.yuk_hnc.r_array, self.qsp.Γii, self.qsp.get_κ())
+
+		self.yuk_hnc.set_βu_matrix(βu_r_matrix)
+		self.yuk_hnc.initialize_c_k()
+		self.yuk_hnc.set_C_matrix()
 		self.yuk_hnc.initialize_βu_matrix()
 		self.yuk_hnc.HNC_solve(**self.hnc_solve_options)
 
