@@ -339,6 +339,14 @@ class Integral_Equation_Solver():
         tot_eqn = np.nan_to_num(tot_eqn, nan=0, posinf=1e4, neginf=-1e4)
         return tot_eqn
 
+    def get_S_k_matrix(self, h_k_matrix):
+        tot_rho = np.sum(self.rho_matrix)
+        x_array  = self.rho_matrix/tot_rho
+        x_matrix = np.diag(self.rho_matrix)/tot_rho
+        S_k_matrix = x_matrix + self.rho_matrix[:,np.newaxis,np.newaxis]*self.rho_matrix[np.newaxis,:,np.newaxis]/tot_rho*h_k_matrix
+        return S_k_matrix
+
+
     def get_all_matrices_from_csk(self, c_s_k_matrix):
         c_k_matrix   = c_s_k_matrix - self.βu_l_k_matrix 
         c_s_r_matrix = self.FT_k_2_r_matrix(c_s_k_matrix)
@@ -350,11 +358,12 @@ class Integral_Equation_Solver():
         h_r_matrix = np.where(h_r_matrix>self.h_max, self.h_max, h_r_matrix)
         h_r_matrix = np.where(h_r_matrix<-1, -1, h_r_matrix)
         h_k_matrix = self.FT_r_2_k_matrix(h_r_matrix)
+        S_k_matrix = self.get_S_k_matrix(h_k_matrix)
 
-        return c_k_matrix ,c_s_r_matrix ,c_r_matrix ,γs_k_matrix ,γs_r_matrix ,βω_r_matrix ,h_r_matrix ,h_r_matrix ,h_k_matrix
+        return c_k_matrix ,c_s_r_matrix ,c_r_matrix ,γs_k_matrix ,γs_r_matrix ,βω_r_matrix ,h_r_matrix ,h_r_matrix ,h_k_matrix, S_k_matrix
     
     def set_all_matrices_from_csk(self, c_s_k_matrix):
-        c_k_matrix ,c_s_r_matrix ,c_r_matrix ,γs_k_matrix ,γs_r_matrix ,βω_r_matrix ,h_r_matrix ,h_r_matrix ,h_k_matrix = self.get_all_matrices_from_csk(c_s_k_matrix)
+        c_k_matrix ,c_s_r_matrix ,c_r_matrix ,γs_k_matrix ,γs_r_matrix ,βω_r_matrix ,h_r_matrix ,h_r_matrix ,h_k_matrix, S_k_matrix = self.get_all_matrices_from_csk(c_s_k_matrix)
         self.c_k_matrix   = c_k_matrix
         self.c_s_r_matrix = c_s_r_matrix
         self.c_r_matrix   = c_r_matrix
@@ -363,7 +372,7 @@ class Integral_Equation_Solver():
         self.βω_r_matrix  = βω_r_matrix
         self.h_r_matrix   = h_r_matrix
         self.h_k_matrix   = h_k_matrix
-    
+        self.S_k_matrix   = S_k_matrix
 
     def Picard_c_s_k(self, old_c_s_k_matrix, new_c_s_k_matrix, alpha=0.1 ):
         return old_c_s_k_matrix*(1-alpha) + new_c_s_k_matrix*alpha
