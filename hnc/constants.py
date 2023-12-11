@@ -3,7 +3,7 @@ from numpy import pi
 π = pi
 
 m_e = 1
-m_p = 1833.274 # In AU
+m_p = 1836.1526724584617 # In AU
 aB = 5.29177210903e-11 # Bohr radius in m
 k_B = 1.380649e-23 # SI J/K
 
