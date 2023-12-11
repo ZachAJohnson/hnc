@@ -340,10 +340,10 @@ class Integral_Equation_Solver():
         return tot_eqn
 
     def get_S_k_matrix(self, h_k_matrix):
-        tot_rho = np.sum(self.rho_matrix)
-        x_array  = self.rho_matrix/tot_rho
-        x_matrix = np.diag(self.rho_matrix)/tot_rho
-        S_k_matrix = x_matrix + self.rho_matrix[:,np.newaxis,np.newaxis]*self.rho_matrix[np.newaxis,:,np.newaxis]/tot_rho*h_k_matrix
+        tot_rho = np.sum(self.rho)
+        x_array  = self.rho/tot_rho
+        x_matrix = np.diag(self.rho)/tot_rho
+        S_k_matrix = x_matrix[:,:,np.newaxis] + self.rho[:,np.newaxis,np.newaxis]*self.rho[np.newaxis,:,np.newaxis]/tot_rho*h_k_matrix
         return S_k_matrix
 
 
