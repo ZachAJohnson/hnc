@@ -137,7 +137,6 @@ class Integral_Equation_Solver():
         self.c_s_r_matrix = self.FT_k_2_r_matrix(self.c_s_k_matrix)
 
     def initialize_βu_matrix(self):
-        # Initialize to a Yukawa potential as a default
         self.set_βu_matrix(self.Γ_matrix[:,:,np.newaxis]/self.r_array[np.newaxis, np.newaxis,:]*np.exp(- self.kappa[:,:,np.newaxis] * self.r_array[np.newaxis, np.newaxis,:]) )
 
     def initialize_c_k(self):
