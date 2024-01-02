@@ -149,7 +149,7 @@ class Quantum_Statistical_Potentials():
        
     ######### Build Actual QSP's
     def βvee(self, r):
-        return self.βv_Kelbg(self.Γee,r, self.Λee) + self.βv_Pauli(r)
+        return self.βv_Deutsch(self.Γee,r, self.Λee) + self.βv_Pauli(r)
 
     def βvei(self, r):
         """
@@ -160,8 +160,8 @@ class Quantum_Statistical_Potentials():
 
         γep = (x1 + x1**2)/( 1 + a_ep*x1 + x1**2)
         # SETTING γ fit to 1 !!
-        return self.βv_Improved_Kelbg(self.Γei, r, self.Λei, γ=1 ) 
-        # return self.βv_Deutsch(self.Γei, r, self.Λei)
+        # return self.βv_Improved_Kelbg(self.Γei, r, self.Λei, γ=1 ) 
+        return self.βv_Deutsch(self.Γei, r, self.Λei)
 
     def βvei_atomic(self, r, core_height=0):
         r_c  = self.r_c #3/5 r_s in linear n_b(r) model
