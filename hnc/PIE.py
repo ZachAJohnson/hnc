@@ -267,10 +267,10 @@ class Plasma_of_Ions_and_Electrons():
 		elif hnc.final_Picard_err > self.Picard_max_err:
 			print("QUIT: Picard Err too high. Newton assumed not to converge. Try better initial condition or smaller α.")
 
-		# hnc.Heff = self.get_effective_ion_H(hnc, qsp)
-		# hnc.Ueff, hnc.Peff = self.get_effective_ion_U_P(hnc, qsp)
-		# hnc.u_energy_density = hnc.total_energy_density()/self.qsp.ri**3 
-		# hnc.Pressure = hnc.total_pressure()/self.qsp.ri**3 
+		hnc.Heff = self.get_effective_ion_H(hnc, qsp)
+		hnc.Ueff, hnc.Peff = self.get_effective_ion_U_P(hnc, qsp)
+		hnc.u_energy_density = hnc.total_energy_density()/self.qsp.ri**3 
+		hnc.Pressure = hnc.total_pressure()/self.qsp.ri**3 
 		hnc.invert_HNC_OZ([1]) # make effective ion plasma
 		                        
 		if self.βu_options['add_bridge']:
@@ -343,8 +343,9 @@ class Plasma_of_Ions_and_Electrons():
 				tmp_qsp = self.make_qsp(ni_i, self.Zbar, Ti, Te)
 				tmp_hnc = self.make_hnc(tmp_qsp, self.Zbar)
 				
-				temp_ratio = self.hnc.Temp_matrix/tmp_hnc.Temp_matrix
-				c_s_k_guess = temp_ratio[:,:,np.newaxis] * self.hnc.c_s_k_matrix.copy()
+				# temp_ratio = self.hnc.Temp_matrix/tmp_hnc.Temp_matrix
+				# c_s_k_guess = temp_ratio[:,:,np.newaxis] * self.hnc.c_s_k_matrix.copy()
+				c_s_k_guess = self.hnc.c_s_k_matrix.copy()
 				self.run_hnc(tmp_hnc, tmp_qsp, c_s_k_guess = c_s_k_guess)
 
 				self.mini_self_table[i][j] = tmp_hnc

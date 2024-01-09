@@ -1,0 +1,10 @@
+# Millitzer Thesis
+# Metallic liquid to plasma transition
+ρ[g/cc]  T[K]
+5.268e-1 2.241e+4
+1.238e+0 3.469e+4
+2.189e+0 4.612e+4
+6.523e+0 7.850e+4
+2.038e+1 1.388e+5
+7.004e+1 2.597e+5
+9.536e+2 9.627e+5
