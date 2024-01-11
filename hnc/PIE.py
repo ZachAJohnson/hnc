@@ -328,6 +328,7 @@ class Plasma_of_Ions_and_Electrons():
 	def make_nT_table(self, ε_table=0.01, N_table=2):
 		self.mini_self_table = np.zeros((N_table,N_table)).tolist()
 		self.T_table = np.zeros((N_table,N_table))
+		self.n_table = np.zeros((N_table,N_table))
 		self.u_table = np.zeros((N_table,N_table))
 		self.Ueff_table = np.zeros((N_table,N_table))
 		self.Peff_table = np.zeros((N_table,N_table))
@@ -338,11 +339,10 @@ class Plasma_of_Ions_and_Electrons():
 		Te_list = self.Ti*np.linspace(1-ε_table, 1+ε_table, num = N_table)
 		
 		for i, ni_i in enumerate(ni_list):
-			for j, Ts_j in enumerate(zip(Te_list, Ti_list)):
-				Te, Ti = Ts_j
-				tmp_qsp = self.make_qsp(ni_i, self.Zbar, Ti, Te)
+			for j, (Te_j, Ti_j) in enumerate(zip(Te_list, Ti_list)):
+				tmp_qsp = self.make_qsp(ni_i, self.Zbar, Ti_j, Te_j)
 				tmp_hnc = self.make_hnc(tmp_qsp, self.Zbar)
-				
+				print(f"n: {ni_i}, Te_j = {Te_j}")
 				# temp_ratio = self.hnc.Temp_matrix/tmp_hnc.Temp_matrix
 				# c_s_k_guess = temp_ratio[:,:,np.newaxis] * self.hnc.c_s_k_matrix.copy()
 				c_s_k_guess = self.hnc.c_s_k_matrix.copy()
@@ -354,7 +354,8 @@ class Plasma_of_Ions_and_Electrons():
 				self.Heff_table[i,j]  = tmp_hnc.Heff
 				self.Ueff_table[i,j] = tmp_hnc.Ueff
 				self.Peff_table[i,j] = tmp_hnc.Peff
-				self.T_table[i,j] = Ti
+				self.T_table[i,j] = Ti_j
+				self.n_table[i,j] = ni_i
 
 	def get_effective_ion_cp(self, ε_derivative=1e-6, **table_kwargs):
 		self.make_nT_table(**table_kwargs)
