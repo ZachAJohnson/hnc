@@ -10,7 +10,7 @@ from scipy.special import erfc
 
 # Build Components for QSP's
 from .constants import *
-from .misc import rs_from_n, n_from_rs, P_Ideal_Fermi_Gas
+from .misc import rs_from_n, n_from_rs#, P_Ideal_Fermi_Gas
 
 class Quantum_Statistical_Potentials():
     """
@@ -113,7 +113,8 @@ class Quantum_Statistical_Potentials():
         return Te_c
 
     def get_κ(self):
-        kTF = np.sqrt(  4*π*self.ne**2  /P_Ideal_Fermi_Gas(self.Te_c, self.ne)  )
+        # kTF = np.sqrt(  4*π*self.ne**2  /P_Ideal_Fermi_Gas(self.Te_c, self.ne)  )
+        kTF   = np.sqrt(  4*π*self.ne  / (self.Te**1.8 + (2/3*self.E_F)**1.8 )**(5/9.) )
         return kTF*self.ri
 
     def Tei_geometric(self, Te, Ti): # Returns geometric mean of two temperatures

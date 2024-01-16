@@ -51,15 +51,16 @@ class Plasma_of_Ions_and_Electrons():
 
 		self.names = ["ion", "electron"] 
 		self.Picard_max_err = Picard_max_err
-		self.qsp = self.make_qsp(self.ni_cc, self.Zbar, self.Ti, self.Te)
-		self.hnc = self.make_hnc(self.qsp, self.Zbar)
-
-		#Now make Pauli potential directly or not
+		
+		# Now make Pauli potential directly or not
 		self.find_βuee = ﬁnd_βuee
 		if find_βuee==True:
 			self.get_βPauli()
+
+		self.qsp = self.make_qsp(self.ni_cc, self.Zbar, self.Ti, self.Te)
+		self.hnc = self.make_hnc(self.qsp, self.Zbar)
+
 		
-		self.make_βu_matrix_from_qsp(self.hnc, self.qsp)
 
 	def make_βu_matrix_from_qsp(self, hnc, qsp):
 		pseudopotential, add_bridge, bridge = self.βu_options[ 'pseudopotential' ], self.βu_options['add_bridge'], self.βu_options['bridge']
@@ -97,6 +98,8 @@ class Plasma_of_Ions_and_Electrons():
 		temperature_matrix_AU = qsp.Tij
 		masses= np.array([qsp.m_i, m_e])
 		hnc = IET_solver(2, qsp.Γ_matrix, densities_in_rs, temperature_matrix_AU, masses, **self.hnc_options)
+		
+		self.make_βu_matrix_from_qsp(hnc, qsp)
 		return hnc
 	
 	# Functions for making Pauli potential
