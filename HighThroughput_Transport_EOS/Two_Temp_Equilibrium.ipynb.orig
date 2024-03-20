@@ -1,0 +1,125 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "id": "46414957-0607-4e06-ac19-f5c71454421a",
+   "metadata": {
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "import numpy as np\n",
+    "\n",
+    "from hnc.hnc.constants import *\n",
+    "from hnc.hnc.misc import *"
+   ]
+  },
+  {
+   "cell_type": "code",
+<<<<<<< HEAD
+   "execution_count": 8,
+=======
+   "execution_count": 5,
+>>>>>>> 9711772a537c0a6f6ca838be2a69f743938e1553
+   "id": "b15081d0-142a-4a23-9e3f-c0c20fd66687",
+   "metadata": {
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+<<<<<<< HEAD
+      "T_i = 11604.53 [K]\n",
+      "T_e = 580226.25 [K]\n",
+      "Length L_AU=4.386453183997362:\n",
+      "region simulation_box block -4.3865 4.3865 -4.3865 4.3865 -4.3865 4.3865 \n",
+=======
+      "Length L_AU=8.772906367994723 = 8.772906367994723\n",
+>>>>>>> 9711772a537c0a6f6ca838be2a69f743938e1553
+      "dt is in range: [0.001201295385005376, 0.002402590770010752] [fs]\n"
+     ]
+    }
+   ],
+   "source": [
+    "Γi = 50\n",
+    "Γe = 1\n",
+    "\n",
+    "Ni = 1000\n",
+    "Ne = 1000\n",
+    "\n",
+    "Ti = 1*eV_to_AU\n",
+<<<<<<< HEAD
+    "Te = Γi/Γe*Ti\n",
+    "print(f\"T_i = {Ti*AU_to_K:0.2f} [K]\")\n",
+    "print(f\"T_e = {Te*AU_to_K:0.2f} [K]\")\n",
+=======
+    "Te = 50*eV_to_AU\n",
+>>>>>>> 9711772a537c0a6f6ca838be2a69f743938e1553
+    "\n",
+    "Zi, Ze = 1, 1\n",
+    "\n",
+    "ri = Zi**2/Ti/Γi\n",
+    "re = Ze**2/Te/Γe\n",
+    "\n",
+    "ni = n_from_rs(ri)\n",
+    "ne = n_from_rs(re)\n",
+    "\n",
+    "L_AU = (Ni/ni)**(1/3)/2\n",
+    "print( f\"Length L_AU={ L_AU }:\" )\n",
+    "\n",
+    "print( f\"region simulation_box block {-L_AU:0.4f} {L_AU:0.4f} {-L_AU:0.4f} {L_AU:0.4f} {-L_AU:0.4f} {L_AU:0.4f} \" )\n",
+    "\n",
+    "m_e_heavy = m_p/1\n",
+    "\n",
+    "ωe = np.sqrt(4*π*ne/m_e_heavy)\n",
+    "τe_range_AU = [0.005, 0.01] * 1/ωe\n",
+    "print( \"dt is in range: [{0}, {1}] [fs]\".format(*τe_range_AU*AU_to_s*1e15))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "id": "5017c90c-f639-4810-a28f-c09760ab6eef",
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "580226.2503079912"
+      ]
+     },
+     "execution_count": 6,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "Te*AU_to_K"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3 (ipykernel)",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.10.6"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
