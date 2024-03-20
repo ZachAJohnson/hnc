@@ -205,6 +205,9 @@ class Integral_Equation_Solver():
         self.βu_r_matrix = βu_matrix
         self.split_βu_matrix()
         self.set_βu_k_matrices()
+        self.initialize_c_k()
+        self.set_C_matrix()
+
 
     def split_βu_matrix(self):
         """
@@ -822,6 +825,7 @@ class Integral_Equation_Solver():
 
         plt.tight_layout()
         # plt.show()
+        return fig, axs 
 
     def plot_convergence_uex(self):
         fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(10,6))
@@ -837,6 +841,7 @@ class Integral_Equation_Solver():
         #axs[0,0].legend(fontsize=20)
         
         plt.show()
+        return fig, ax 
 
     def plot_species_convergence_g(self, n_slices=4):
         fig, axs = plt.subplots(ncols=self.N_species, nrows=self.N_species, figsize=(10*self.N_species,6*self.N_species))
@@ -865,6 +870,7 @@ class Integral_Equation_Solver():
         #axs[0,0].legend(fontsize=20)
 
         plt.show()
+        return fig, axs 
 
     def plot_species_convergence_c(self, n_slices=4):
         fig, axs = plt.subplots(ncols=self.N_species, nrows=self.N_species, figsize=(10*self.N_species,6*self.N_species))
@@ -893,6 +899,7 @@ class Integral_Equation_Solver():
         #axs[0,0].legend(fontsize=20)
         
         plt.show()
+        return fig, axs 
 
     def plot_species_convergence_ck(self, n_slices=4):
         fig, axs = plt.subplots(ncols=self.N_species, nrows=self.N_species, figsize=(10*self.N_species,6*self.N_species))
@@ -922,6 +929,8 @@ class Integral_Equation_Solver():
         #axs[0,0].legend(fontsize=20)
         
         plt.show()
+        return fig, axs
+
     def plot_species_convergence_csk(self, n_slices=4):
         fig, axs = plt.subplots(ncols=self.N_species, nrows=self.N_species, figsize=(10*self.N_species,6*self.N_species))
         fig.suptitle("Direct Correlation Function Convergence Blue to Red" ,fontsize=20)
@@ -950,6 +959,7 @@ class Integral_Equation_Solver():
         #axs[0,0].legend(fontsize=20)
         
         plt.show()
+        return fig, axs 
 
     def plot_g_grid(self):
         fig, axs = plt.subplots(ncols=self.N_species, nrows=self.N_species, figsize=(8*self.N_species,4*self.N_species))
@@ -974,6 +984,7 @@ class Integral_Equation_Solver():
         
         plt.tight_layout(rect=[0.03, 0.03, 0.95, 0.95], pad=0.4, w_pad=5.0, h_pad=5.0)
         plt.show()
+        return fig, axs
 
     def plot_g_all_species(self, data_to_compare=None, data_names=None, gmax=None):
         fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(10,8))
@@ -1017,7 +1028,8 @@ class Integral_Equation_Solver():
         
         # plt.tight_layout()
         plt.show()
-    
+        return fig, ax 
+
     def plot_ck_all_species(self, data_to_compare=None, data_names=None, gmax=None):
         fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(10,8))
         fig.suptitle("Radial Distribution Function for all Species", fontsize=20, y=1)
@@ -1045,6 +1057,7 @@ class Integral_Equation_Solver():
         
         plt.tight_layout()
         plt.show()
+        return fig, ax 
 
     def plot_csk_all_species(self, data_to_compare=None, data_names=None, gmax=None):
         fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(10,8))
@@ -1073,6 +1086,7 @@ class Integral_Equation_Solver():
         
         plt.tight_layout()
         plt.show()
+        return fig, ax 
 
 
     def plot_g_vs_murillo(self, gmax=None):
@@ -1111,6 +1125,7 @@ class Integral_Equation_Solver():
         plt.legend(fontsize=20)
         plt.grid()
         plt.show()
+        return fig, ax 
 
     def plot_βu_all_species(self):
         fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(8,6))
@@ -1132,6 +1147,7 @@ class Integral_Equation_Solver():
         plt.tight_layout()#rect=[0.03, 0.03, 0.95, 0.95], pad=0.4, w_pad=5.0, h_pad=5.0)
         plt.legend(fontsize=15)
         plt.show()
+        return fig, ax 
 
 if __name__ == "__main__":
     N_species = 3

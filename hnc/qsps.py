@@ -17,7 +17,7 @@ class Quantum_Statistical_Potentials():
     Class defining classical mapping potentials for electron-ion systems where the electrons are partially degenerate.  
     """
 
-    def __init__(self, Z, A, Zbar, Te, Ti, ri, ne, which_Tij='thermal', r_c = 3/5, verbose= False, Te_c_type = 'Fermi', custom_Te_c = None):
+    def __init__(self, Z, A, Zbar, Te, Ti, ri, ne, which_Tij='thermal', r_c = 3/5, verbose= False, Te_c_type = 'DMC', custom_Te_c = None):
         self.Z = Z
         self.A = A
         self.Zbar = Zbar

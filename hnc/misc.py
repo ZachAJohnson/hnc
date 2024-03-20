@@ -27,8 +27,10 @@ def Gamma(T, n, Z):
 
 def Debye_length(T, ni, Zbar):
     ne = Zbar*ni
-    # λD = 1/np.sqrt(  4*π*ne/T + 4*π*Zbar**2*ni/T  )
-    λD = 1/np.sqrt(  4*π*ne/T )
+    EF = Fermi_Energy(ne)
+    T_effective = (T**1.8 + (2/3*EF)**1.8)**(1/1.8)
+    λD = 1/np.sqrt(  4*π*ne/T_effective ) # Including degeneracy
+    # λD = 1/np.sqrt(  4*π*ne/T_effective + 4*π*Zbar**2*ni/T  )  # Including ions
     return λD
 
 def Kappa(T, ni, Zbar):
