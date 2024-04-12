@@ -4,7 +4,10 @@ from numpy import pi
 
 m_e = 1
 m_p = 1836.1526724584617 # In AU
-m_amu = m_p/1.007276466812 # 1/12 of carbon mass
+
+α  = 0.0072973525693 # 1/c in AU
+c  = 1/α
+
 aB = 5.29177210903e-11 # Bohr radius in m
 k_B = 1.380649e-23 # SI J/K
 
@@ -14,6 +17,7 @@ K_to_eV = 1/eV_to_K
 
 
 J_to_erg = 1e7
+AU_to_amu = 1.007276466812/m_p # 1/12 of carbon mass
 AU_to_eV = 1/eV_to_AU
 AU_to_J = 4.359744e-18
 AU_to_erg = AU_to_J*J_to_erg
@@ -33,6 +37,8 @@ AU_to_Volts = 27.211386245988
 AU_to_Ohms  = AU_to_Volts/AU_to_Amps
 AU_to_Siemens = 1/AU_to_Ohms
 
+
+amu_to_AU = 1/AU_to_amu
 eV_to_AU   = 1/AU_to_eV
 J_to_AU   = 1/AU_to_J
 erg_to_AU   = 1/AU_to_erg

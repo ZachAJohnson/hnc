@@ -18,7 +18,7 @@ from .constants import *
 
 class Integral_Equation_Solver():
     def __init__(self, N_species, Γ_matrix, number_densities_in_rs, temperature_in_AU_matrix, masses, dst_type=3, h_max=1e3, oz_method='standard',
-        kappa = None, kappa_multiscale = 1.0,  R_max=25.0, N_bins=512, names=None, closure='hnc'):
+        kappa = None, kappa_multiscale = 1.0,  R_max=25.0, N_bins=512, names=None, closure='hnc', use_U00_closure = False):
 
         matrify = lambda numbers: np.array(numbers).reshape(N_species,N_species) 
         vectorfy = lambda numbers: np.array(numbers).reshape(N_species)
@@ -26,8 +26,6 @@ class Integral_Equation_Solver():
         self.N_species = N_species
         self.Γ_matrix = matrify(Γ_matrix) 
         self.rho = vectorfy(number_densities_in_rs)
-        self.Temp_matrix = matrify(temperature_in_AU_matrix) #(self.mass_list[:,np.newaxis]*self.Temp_list[np.newaxis,:] + self.mass_list[np.newaxis,:]*self.Temp_list[:,np.newaxis])/(self.mass_list[:,np.newaxis] + self.mass_list[np.newaxis,:])
-        self.β_matrix = 1/self.Temp_matrix
         self.mass_list = vectorfy(masses)
         self.kappa_multiscale = kappa_multiscale
         self.R_max = R_max
@@ -37,6 +35,14 @@ class Integral_Equation_Solver():
         self.h_max=h_max
         self.Temp_list = np.diag(self.Temp_matrix)
         self.β_list = 1/self.Temp_list
+        self.use_U00_closure = use_U00_closure # Whether or not to insert an explicit U_00. Necessary for non-equilibrium case. 
+
+        if np.all(self.Temp_list != self.Temp_list[0]):
+            print("WARNING: Non-equilibrium system detected. You MUST put lowest mass particle at zero index. Currently all heavy particles need the same temperature.")
+
+            if self.U00_closure is False:
+                print("ERROR: U00_closure not set for non-equilibrium system. Nonsensical answer results.")
+
         self.mass_matrix = (self.mass_list[:,np.newaxis]*self.mass_list[np.newaxis,:])/(self.mass_list[:,np.newaxis] + self.mass_list[np.newaxis,:])
         if kappa is None:
             self.kappa = np.ones_like(self.Γ_matrix)
@@ -167,7 +173,6 @@ class Integral_Equation_Solver():
         self.fact_k_2_r = self.del_k / (4. * np.pi**2)
         self.dimless_dens = 3. / (4 * np.pi)
 
-    
     def FT_r_2_k(self, input_array):
         from_dst = self.fact_r_2_k * fftpack.dst(self.r_array * input_array, type=self.dst_type)
         return from_dst / self.k_array
@@ -226,14 +231,14 @@ class Integral_Equation_Solver():
         
     def get_γs_k_matrix(self, U_s_k_matrix):
         """
-        Note this does NOT do the low-mass - low-mass term correctly! This term does not have a closure as of yet.
+        Note this does NOT do the low-mass - low-mass (e-e) term correctly! This term does not have a closure as of yet.
 
         C_ij  = U_ij β_j
         Cs_ij = U_ij β_j - u^L_ij β_j
         D_ij  = n_i U_ij β_j
         E_ij  = u^s_ij β_j
 
-        Let γ_k = h_k + C_k, γs_k = h_k + C_k
+        Let γ_k = h_k + C_k, γs_k = h_k + C_k  # Which is NOT symmetric!!!
         γs_k = (I + D)^-1  (-E + D Cs )
 
         """
@@ -393,7 +398,6 @@ class Integral_Equation_Solver():
 
         return tot_err
     
-
     def excess_energy_density_matrix(self):
 
         u_matrix = self.u_r_matrix*self.Temp_matrix[:,:,np.newaxis]
@@ -467,81 +471,93 @@ class Integral_Equation_Solver():
         elif self.closure in ['PY','py']:
             return self.guess_U_s_k_matrix_py(U_s_k_matrix)
 
-    def guess_U_s_k_matrix_hnc(self, U_s_k_matrix):
+    def guess_U_s_k_matrix_hnc(self, U_s_k_matrix): # HNC closure for Te!=Ti is only accurate for lower mass on right index. Meaning, of [[00,01],[10,11]] only lower triangle is accurate.
+        # Get γs from OZ solution
         γs_k_matrix = self.get_γs_k_matrix(U_s_k_matrix)                           # 1. U_k, u_l_k -> γ_k   (Definition)
-
         γs_r_matrix = self.FT_k_2_r_matrix(γs_k_matrix) # γ_k        -> γ_r   (FT)     
+
         h_r_matrix = -1 + np.exp(γs_r_matrix - self.u_s_r_matrix) # 2. γ_r,u_s_r  -> h_r   (HNC)   
         h_r_matrix = np.where(h_r_matrix>self.h_max, self.h_max, h_r_matrix)
         h_k_matrix = self.FT_r_2_k_matrix(h_r_matrix)
         # Plug into HNC equation
 
-        new_U_s_r_matrix = h_r_matrix - γs_r_matrix # 3. h_r, γ_r   -> U_s_r (Ornstein-Zernicke)
-        new_U_s_k_matrix = self.FT_r_2_k_matrix(new_U_s_r_matrix)
+        # Get indices for forming symmetric matrix
+        lower_triangle_indices = np.tril_indices(self.N_species,-1) # -1 means 1 below the diagonal 
+        diagonal_indices = np.diag_indices(self.N_species)
+
+        # construct symmetric matrix 
+        nonsymmetric_matrix =  (h_r_matrix - γs_r_matrix)
+        new_U_s_r_matrix = np.zeros_like(self.h_r_matrix) # 3. h_r, γ_r   -> U_s_r (Ornstein-Zernicke)
+        
+        new_U_s_r_matrix[lower_triangle_indices] = nonsymmetric_matrix[lower_triangle_indices] # lower triangle
+        new_U_s_r_matrix = new_U_s_r_matrix + np.transpose(new_U_s_r_matrix, axes=(1,0,2)) # upper triangle (flips first two axes)
+        new_U_s_r_matrix[diagonal_indices] = nonsymmetric_matrix[diagonal_indices] # diagonal
+    
+        new_U_s_k_matrix = self.FT_r_2_k_matrix(new_U_s_r_matrix) # FT
         
         return new_U_s_k_matrix
 
-    def guess_U_s_k_matrix_py(self, U_s_k_matrix):
-        γs_k_matrix = self.get_γs_k_matrix(U_s_k_matrix)                           # 1. U_k, u_l_k -> γ_k   (Definition)
+    # def guess_U_s_k_matrix_py(self, U_s_k_matrix):
+    #     γs_k_matrix = self.get_γs_k_matrix(U_s_k_matrix)                           # 1. U_k, u_l_k -> γ_k   (Definition)
 
-        γs_r_matrix = self.FT_k_2_r_matrix(γs_k_matrix) # γ_k        -> γ_r   (FT)     
-        # h_r_matrix  = np.exp(-self.u_r_matrix)*(1 + γs_r_matrix + self.u_l_r_matrix)    
-        # h_r_matrix  = np.where(h_r_matrix>self.h_max, self.h_max, h_r_matrix)
-        # h_k_matrix  = self.FT_r_2_k_matrix(h_r_matrix)
-        # Plug into HNC equation
+    #     γs_r_matrix = self.FT_k_2_r_matrix(γs_k_matrix) # γ_k        -> γ_r   (FT)     
+    #     # h_r_matrix  = np.exp(-self.u_r_matrix)*(1 + γs_r_matrix + self.u_l_r_matrix)    
+    #     # h_r_matrix  = np.where(h_r_matrix>self.h_max, self.h_max, h_r_matrix)
+    #     # h_k_matrix  = self.FT_r_2_k_matrix(h_r_matrix)
+    #     # Plug into HNC equation
 
-        new_U_s_r_matrix = -1 - γs_r_matrix + np.exp(-self.u_r_matrix)*(1 + γs_r_matrix)#h_r_matrix - γs_r_matrix # 3. h_r, γ_r   -> U_s_r (Ornstein-Zernicke)
-        new_U_s_k_matrix = self.FT_r_2_k_matrix(new_U_s_r_matrix)
+    #     new_U_s_r_matrix = -1 - γs_r_matrix + np.exp(-self.u_r_matrix)*(1 + γs_r_matrix)#h_r_matrix - γs_r_matrix # 3. h_r, γ_r   -> U_s_r (Ornstein-Zernicke)
+    #     new_U_s_k_matrix = self.FT_r_2_k_matrix(new_U_s_r_matrix)
         
-        return new_U_s_k_matrix
+    #     return new_U_s_k_matrix
 
-    def hnc_newton_solve(self, **newton_kwargs):
-        self.newton_iters = 0
-        self.newton_succeed=False
-        def callback_func(x, residual):
-            # print("U_s_k: ", x.reshape(self.N_species, self.N_species, self.N_bins))
-            self.newton_iters +=1
-            self.U_s_k_matrix = x.reshape(self.N_species,self.N_species,self.N_bins)
-            self.set_all_matrices_from_csk(self.U_s_k_matrix)
-            self.u_ex_list.append(self.excess_energy_density())
-            self.h_r_matrix_list.append(self.h_r_matrix.copy())            
-            self.U_s_k_matrix_list.append(self.U_s_k_matrix.copy())
-            residual_norm = np.linalg.norm(residual)/np.sqrt(self.N_bins*self.N_species**2)
-            self.tot_err_list.append(residual_norm)
-            change = np.linalg.norm(self.U_s_k_matrix_list[-1] - self.U_s_k_matrix_list[-2]) / np.sqrt(self.N_bins*self.N_species**2)
+    # def hnc_newton_solve(self, **newton_kwargs):
+    #     self.newton_iters = 0
+    #     self.newton_succeed=False
+    #     def callback_func(x, residual):
+    #         # print("U_s_k: ", x.reshape(self.N_species, self.N_species, self.N_bins))
+    #         self.newton_iters +=1
+    #         self.U_s_k_matrix = x.reshape(self.N_species,self.N_species,self.N_bins)
+    #         self.set_all_matrices_from_csk(self.U_s_k_matrix)
+    #         self.u_ex_list.append(self.excess_energy_density())
+    #         self.h_r_matrix_list.append(self.h_r_matrix.copy())            
+    #         self.U_s_k_matrix_list.append(self.U_s_k_matrix.copy())
+    #         residual_norm = np.linalg.norm(residual)/np.sqrt(self.N_bins*self.N_species**2)
+    #         self.tot_err_list.append(residual_norm)
+    #         change = np.linalg.norm(self.U_s_k_matrix_list[-1] - self.U_s_k_matrix_list[-2]) / np.sqrt(self.N_bins*self.N_species**2)
             
-            print("Iter: {0}, Newton residual norm: {1:.3e}, Change: {2:.3e} ".format(self.newton_iters, residual_norm, change))
+    #         print("Iter: {0}, Newton residual norm: {1:.3e}, Change: {2:.3e} ".format(self.newton_iters, residual_norm, change))
             
 
-        def f_to_min(U_s_k_flat):
-            U_s_k_matrix = U_s_k_flat.reshape(self.N_species, self.N_species, self.N_bins)
-            matrix_to_min = self.get_hnc_oz_matrix(U_s_k_matrix)
-            return matrix_to_min.flatten()
+    #     def f_to_min(U_s_k_flat):
+    #         U_s_k_matrix = U_s_k_flat.reshape(self.N_species, self.N_species, self.N_bins)
+    #         matrix_to_min = self.get_hnc_oz_matrix(U_s_k_matrix)
+    #         return matrix_to_min.flatten()
 
         
-        # options={'jaU_options':{'rdiff':rdiff, 'inner_m':10, 'method':'gmres','M':None} , 'maxiter':int(1e3)} 
-        # options={'jaU_options':{'rdiff':rdiff} , 'maxiter':int(1e3)} 
-        # options={'jaU_options':{'rdiff':rdiff, 'method':'gmres'} , 'maxiter':int(50)} 
-        # options={'maxfev':int(1e3),'maxiter':int(1e2)}
-        # sol = root(f_to_min, self.U_s_k_matrix, method=method, callback=callback_func, options=options, tol=1e-8)  
-        # sol1 = root(f_to_min, self.U_s_k_matrix, method='df-sane', callback=callback_func, tol=1e-2, options=options)  
-        # sol1 = root(f_to_min, self.U_s_k_matrix, method='anderson', callback=callback_func, tol=1e-2, options=options)  
-        # print("\ndf-sane: ", sol1.success, sol1.message)
-        # options={'jaU_options':{'rdiff':rdiff, 'outer_k':1} , 'maxiter':int(num_iterations)} 
-        # sol2 = root(f_to_min, self.U_s_k_matrix, method='krylov' , callback=callback_func, tol=tol, options=options)  
-        # options={'eps':1e-6,'maxfev':100,'factor':0.1,'xtol':1e-3} 
-        sol2 = root(f_to_min, self.U_s_k_matrix, **newton_kwargs)#method='hybr' , tol=tol, options=options)  
+    #     # options={'jaU_options':{'rdiff':rdiff, 'inner_m':10, 'method':'gmres','M':None} , 'maxiter':int(1e3)} 
+    #     # options={'jaU_options':{'rdiff':rdiff} , 'maxiter':int(1e3)} 
+    #     # options={'jaU_options':{'rdiff':rdiff, 'method':'gmres'} , 'maxiter':int(50)} 
+    #     # options={'maxfev':int(1e3),'maxiter':int(1e2)}
+    #     # sol = root(f_to_min, self.U_s_k_matrix, method=method, callback=callback_func, options=options, tol=1e-8)  
+    #     # sol1 = root(f_to_min, self.U_s_k_matrix, method='df-sane', callback=callback_func, tol=1e-2, options=options)  
+    #     # sol1 = root(f_to_min, self.U_s_k_matrix, method='anderson', callback=callback_func, tol=1e-2, options=options)  
+    #     # print("\ndf-sane: ", sol1.success, sol1.message)
+    #     # options={'jaU_options':{'rdiff':rdiff, 'outer_k':1} , 'maxiter':int(num_iterations)} 
+    #     # sol2 = root(f_to_min, self.U_s_k_matrix, method='krylov' , callback=callback_func, tol=tol, options=options)  
+    #     # options={'eps':1e-6,'maxfev':100,'factor':0.1,'xtol':1e-3} 
+    #     sol2 = root(f_to_min, self.U_s_k_matrix, **newton_kwargs)#method='hybr' , tol=tol, options=options)  
 
-        self.U_s_k_matrix = sol2.x.reshape(self.N_species, self.N_species, self.N_bins)
-        self.U_k_matrix = self.U_s_k_matrix - self.u_l_k_matrix
-        self.γs_k_matrix = self.get_γs_k_matrix(self.U_s_k_matrix)
-        self.γs_r_matrix = self.FT_k_2_r_matrix(self.γs_k_matrix)
-        self.h_r_matrix = -1 + np.exp(self.γs_r_matrix - self.u_s_r_matrix)
-        self.βω_r_matrix = self.u_s_r_matrix - self.γs_r_matrix   # potential of mean force
-        print("\nRoot Finder: ", sol2.success, sol2.message, "final err: {0:.3e}".format(self.total_err(self.U_s_k_matrix)))
-        if sol2.success:
-            self.newton_succeed=True
-        return sol2
+    #     self.U_s_k_matrix = sol2.x.reshape(self.N_species, self.N_species, self.N_bins)
+    #     self.U_k_matrix = self.U_s_k_matrix - self.u_l_k_matrix
+    #     self.γs_k_matrix = self.get_γs_k_matrix(self.U_s_k_matrix)
+    #     self.γs_r_matrix = self.FT_k_2_r_matrix(self.γs_k_matrix)
+    #     self.h_r_matrix = -1 + np.exp(self.γs_r_matrix - self.u_s_r_matrix)
+    #     self.βω_r_matrix = self.u_s_r_matrix - self.γs_r_matrix   # potential of mean force
+    #     print("\nRoot Finder: ", sol2.success, sol2.message, "final err: {0:.3e}".format(self.total_err(self.U_s_k_matrix)))
+    #     if sol2.success:
+    #         self.newton_succeed=True
+    #     return sol2
         
     # Solver
     def HNC_solve(self, num_iterations=1e3, tol=1e-6, iters_to_wait=1e2, iters_to_use=3, alpha_Ng = 1e-3 ,
