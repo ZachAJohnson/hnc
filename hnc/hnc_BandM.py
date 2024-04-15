@@ -17,7 +17,7 @@ from .constants import *
 
 
 class Integral_Equation_Solver():
-    def __init__(self, N_species, number_densities_in_rs, temperature_in_AU_list, masses, u_matrix = None, dst_type=3, h_max=1e3,
+    def __init__(self, N_species, number_densities_in_rs, temperature_in_AU_list, u_matrix = None, dst_type=3, h_max=1e3,
        Γ_matrix = None, κ_screen = None, kappa_multiscale = 1.0,  R_max=25.0, N_bins=512, names=None, closure='hnc', use_U00_closure = False):
 
         matrify = lambda numbers: np.array(numbers).reshape(N_species,N_species) 
@@ -25,7 +25,6 @@ class Integral_Equation_Solver():
 
         self.N_species = N_species 
         self.rho = vectorfy(number_densities_in_rs)
-        self.mass_list = vectorfy(masses)
         self.kappa_multiscale = kappa_multiscale
         self.R_max = R_max
         self.N_bins = N_bins
@@ -41,7 +40,6 @@ class Integral_Equation_Solver():
             if self.U00_closure is False:
                 print("ERROR: U00_closure not set for non-equilibrium system. Nonsensical answer results.")
 
-        self.mass_matrix = (self.mass_list[:,np.newaxis]*self.mass_list[np.newaxis,:])/(self.mass_list[:,np.newaxis] + self.mass_list[np.newaxis,:])
 
         self.I = np.eye(N_species)
         self.closure = closure # py or hnc
@@ -393,7 +391,15 @@ class Integral_Equation_Solver():
         new_U_s_k = self.Ng_guess_U_s_k
         return  new_U_s_k
 
-    def total_err(self, U_s_k_matrix):
+    def check_Usk00_closure(self, U_s_k_matrix):
+        if self.use_U00_closure == True:
+            U_s_k_matrix[0,0] = self.u_s_k_matrix[0,0]
+            return U_s_k_matrix
+        else:
+            return U_s_k_matrix
+
+    def total_err(self, U_s_k_matrix, verbose=False):
+        U_s_k_matrix = self.check_Usk00_closure(U_s_k_matrix) # Does nothing if not needed. Otherwise, enforces low mass closure 
         U_s_r_matrix = self.FT_k_2_r_matrix(U_s_k_matrix)
         U_r_matrix = U_s_r_matrix - self.u_l_r_matrix
         U_k_matrix = U_s_k_matrix - self.u_l_k_matrix
@@ -401,15 +407,18 @@ class Integral_Equation_Solver():
         γs_k_matrix = self.get_γs_k_matrix(U_s_k_matrix)
         h_k_matrix = γs_k_matrix - self.β_list[np.newaxis,:,np.newaxis]*U_s_k_matrix  
         h_r_matrix = self.FT_k_2_r_matrix(h_k_matrix)
-
         tot_eqn =  1 + h_r_matrix  - np.exp(-self.β_list[np.newaxis,:,np.newaxis]*self.u_s_r_matrix + h_r_matrix + self.β_list[np.newaxis,:,np.newaxis]* U_s_r_matrix )
-        
+        tot_eqn = self.symmetric_from_nonsymmetric(tot_eqn)
+        if verbose == True:
+            print("Species err: ", np.linalg.norm(tot_eqn, axis=(2))/np.sqrt(self.N_bins))
+        if self.use_U00_closure==True:
+            tot_eqn[0,0] = 0
         tot_err = np.linalg.norm(tot_eqn) /np.sqrt(self.N_bins*self.N_species**2)
 
         #print("tot: {0:.2e} ".format(tot_err))
 
         return tot_err
-    
+
     # def excess_energy_density_matrix(self):
 
     #     u_matrix = self.u_r_matrix*self.T_matrix[:,:,np.newaxis]
@@ -609,8 +618,10 @@ class Integral_Equation_Solver():
         while converged!=0:
             old_U_s_k_matrix = self.U_s_k_matrix.copy()
             if iteration < iters_to_wait: #Picard at first
+                self.U_s_k_matrix = self.check_Usk00_closure(self.U_s_k_matrix)
                 guess_U_s_k_matrix = self.guess_U_s_k_matrix(self.U_s_k_matrix)
                 self.U_s_k_matrix = self.Picard_U_s_k(self.U_s_k_matrix, guess_U_s_k_matrix, alpha=alpha_Picard )
+                self.U_s_k_matrix = self.check_Usk00_closure(self.U_s_k_matrix)
             elif iteration == iters_to_wait:
                 best_run_index = np.argmin(self.tot_err_list)
                 self.U_s_k_matrix = self.U_s_k_matrix_list[best_run_index]
@@ -726,22 +737,6 @@ class Integral_Equation_Solver():
 
         # Approximate with HNC
         self.βueff_r_matrix   = self.heff_r_matrix - self.ceff_r_matrix + self.βωeff_r_matrix
-
-
-    # def SVT_matrix_eqn_at_single_k(self, h_k_matrix, U_s_k_matrix, u_l_k_matrix):
-    #     """
-        
-    #     """
-    #     U_k_matrix = U_s_k_matrix - u_l_k_matrix
-    #     γs_k_matrix  = h_k_matrix - U_s_k_matrix
-    #     V = np.diag(self.T_list/self.mass_list) 
-    #     D = self.rho[np.newaxis,:]*self.T_matrix/self.mass_list[:,np.newaxis] * U_k_matrix
-    #     E = self.rho[:,np.newaxis]*self.T_matrix/self.mass_list[np.newaxis,:] * U_k_matrix
-    #     U = - u_l_k_matrix * self.T_matrix/self.mass_matrix
-        
-    #     LHS = (V - D) @ γs_k_matrix + γs_k_matrix @ (V - E) 
-    #     RHS = U + D @ U_s_k_matrix + U_s_k_matrix @ E
-    #     return LHS - RHS
 
     def get_symmetriU_from_upper(self, upper_list):
         upper_indcs = np.triu_indices(self.N_species,k=1)
