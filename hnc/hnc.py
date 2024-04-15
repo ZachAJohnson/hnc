@@ -248,7 +248,7 @@ class Integral_Equation_Solver():
     def get_γs_k_matrix_standard(self, c_s_k_matrix):
         """
         invert N_species x N_species  matrix equation to get γ_k = h_k - c_k
-        γs_k = (I-C)^-1 (C c_k_s - u_s_k)
+        γs_k = (I-C)^-1 (C c_k_s - βu_l_k)
         """
         c_k_matrix = c_s_k_matrix - self.βu_l_k_matrix
         C_matrix = self.rho[np.newaxis,:,np.newaxis] * c_k_matrix

@@ -17,37 +17,31 @@ from .constants import *
 
 
 class Integral_Equation_Solver():
-    def __init__(self, N_species, Γ_matrix, number_densities_in_rs, temperature_in_AU_matrix, masses, dst_type=3, h_max=1e3, oz_method='standard',
-        kappa = None, kappa_multiscale = 1.0,  R_max=25.0, N_bins=512, names=None, closure='hnc', use_U00_closure = False):
+    def __init__(self, N_species, number_densities_in_rs, temperature_in_AU_list, masses, u_matrix = None, dst_type=3, h_max=1e3,
+       Γ_matrix = None, κ_screen = None, kappa_multiscale = 1.0,  R_max=25.0, N_bins=512, names=None, closure='hnc', use_U00_closure = False):
 
         matrify = lambda numbers: np.array(numbers).reshape(N_species,N_species) 
         vectorfy = lambda numbers: np.array(numbers).reshape(N_species)
 
-        self.N_species = N_species
-        self.Γ_matrix = matrify(Γ_matrix) 
+        self.N_species = N_species 
         self.rho = vectorfy(number_densities_in_rs)
         self.mass_list = vectorfy(masses)
         self.kappa_multiscale = kappa_multiscale
         self.R_max = R_max
         self.N_bins = N_bins
         self.dst_type = dst_type
-        self.oz_method = oz_method
         self.h_max=h_max
-        self.Temp_list = np.diag(self.Temp_matrix)
-        self.β_list = 1/self.Temp_list
+        self.T_list = np.array(temperature_in_AU_list)
+        self.β_list = 1/self.T_list
         self.use_U00_closure = use_U00_closure # Whether or not to insert an explicit U_00. Necessary for non-equilibrium case. 
 
-        if np.all(self.Temp_list != self.Temp_list[0]):
+        if np.all(self.T_list != self.T_list[0]):
             print("WARNING: Non-equilibrium system detected. You MUST put lowest mass particle at zero index. Currently all heavy particles need the same temperature.")
 
             if self.U00_closure is False:
                 print("ERROR: U00_closure not set for non-equilibrium system. Nonsensical answer results.")
 
         self.mass_matrix = (self.mass_list[:,np.newaxis]*self.mass_list[np.newaxis,:])/(self.mass_list[:,np.newaxis] + self.mass_list[np.newaxis,:])
-        if kappa is None:
-            self.kappa = np.ones_like(self.Γ_matrix)
-        else: 
-            self.kappa = matrify(kappa)
 
         self.I = np.eye(N_species)
         self.closure = closure # py or hnc
@@ -59,9 +53,20 @@ class Integral_Equation_Solver():
             self.names = ['']*self.N_species
         else:
             self.names=names
+
         self.make_name_matrix()
+        self.make_Γκ(Γ_matrix, κ_screen)
+        self.initialize_u_matrix(u_matrix)
 
-
+    def make_Γκ(self, Γ_matrix, κ_screen):
+        if Γ_matrix is None:
+            self.Γ_matrix = np.ones((self.N_species,self.N_species))
+        else:
+            self.Γ_matrix = np.array(Γ_matrix)
+        if κ_screen is None:
+            self.κ_screen = 1
+        else:
+            self.κ_screen = κ_screen
 
     @staticmethod
     def Bridge_function_OCP(x, Gamma ):
@@ -126,13 +131,18 @@ class Integral_Equation_Solver():
         self.U_s_k_matrix= np.zeros_like(self.h_r_matrix)
         self.U_s_r_matrix= np.zeros_like(self.h_r_matrix)
 
-        self.initialize_u_matrix()
-        self.initialize_U_k()
-        self.set_U_matrix()
+        # self.initialize_u_matrix()
+        # self.initialize_U_k()
+        # self.set_U_matrix()
 
-    def initialize_u_matrix(self):
+    def initialize_u_matrix(self, u_matrix):
         # Initialize to a Yukawa potential as a default
-        self.set_u_matrix(self.Γ_matrix[:,:,np.newaxis]/self.r_array[np.newaxis, np.newaxis,:]*np.exp(- self.kappa[:,:,np.newaxis] * self.r_array[np.newaxis, np.newaxis,:]) )
+        if u_matrix is None:        
+            u_matrix = self.Γ_matrix[:,:,np.newaxis]/self.r_array[np.newaxis, np.newaxis,:]*np.exp(- self.κ_screen * self.r_array[np.newaxis, np.newaxis,:]) 
+        
+        # Regardless, need to set a number of arrays with this potential
+        self.set_u_matrix(u_matrix)
+            
 
     def initialize_U_k(self):
         """
@@ -200,6 +210,8 @@ class Integral_Equation_Solver():
         self.u_r_matrix = u_matrix
         self.split_u_matrix()
         self.set_u_k_matrices()
+        self.initialize_U_k()
+
 
     def split_u_matrix(self):
         """
@@ -216,11 +228,11 @@ class Integral_Equation_Solver():
         self.u_l_k_matrix = self.FT_r_2_k_matrix(self.u_l_r_matrix)
         self.u_k_matrix = self.FT_r_2_k_matrix(self.u_r_matrix)
 
-    def set_U_matrix(self):
-        """
-        Defines matrix of rho_i U_ij using initial assumption of diagonal
-        """
-        self.U_matrix = self.rho[np.newaxis,:,np.newaxis] * self.U_k_matrix
+    # def set_U_matrix(self):
+    #     """
+    #     Defines matrix of rho_i U_ij using initial assumption of diagonal
+    #     """
+    #     self.U_matrix = self.rho[np.newaxis,:,np.newaxis] * self.U_k_matrix
    
     def set_γs_k_matrix(self):
         """
@@ -236,21 +248,22 @@ class Integral_Equation_Solver():
         C_ij  = U_ij β_j
         Cs_ij = U_ij β_j - u^L_ij β_j
         D_ij  = n_i U_ij β_j
-        E_ij  = u^s_ij β_j
+        E_ij  = u^L_ij β_j
 
         Let γ_k = h_k + C_k, γs_k = h_k + C_k  # Which is NOT symmetric!!!
-        γs_k = (I + D)^-1  (-E + D Cs )
-
-        """
+        h_k   = -C (1 + D)^-1
+        γs_K  = h_k + Cs_k 
+        γs_K  = (-E + Cs_k D ) (1 + D)^-1
+        """ 
         U_k_matrix = U_s_k_matrix + self.u_l_k_matrix
-        C_matrix  =                                     U_k_matrix * self.β_list[:,np.newaxis,np.newaxis] #     d_kj βj
-        D_matrix  = self.rho[np.newaxis,:,np.newaxis] * U_k_matrix * self.β_list[:,np.newaxis,np.newaxis] # n_k d_kj βj
-        E_matrix  = self.u_l_k_matrix * self.β_list[:,np.newaxis,np.newaxis]
+        C_matrix  =                                     U_k_matrix * self.β_list[np.newaxis,:,np.newaxis] #     d_kj βj
+        D_matrix  = self.rho[:,np.newaxis,np.newaxis] * U_k_matrix * self.β_list[np.newaxis,:,np.newaxis] # n_k d_kj βj
+        E_matrix  = self.u_l_k_matrix * self.β_list[np.newaxis,:,np.newaxis]
         Cs_matrix = C_matrix - E_matrix
 
         denominator = self.invert_matrix(self.I[:,:,np.newaxis] + D_matrix)
-        numerator   = self.A_times_B(D_matrix, Cs_k_matrix ) -  E_matrix
-        γs_k_matrix = self.A_times_B(denominator, numerator )
+        numerator   = -E_matrix + self.A_times_B( Cs_matrix, D_matrix ) 
+        γs_k_matrix = self.A_times_B( numerator, denominator )
         
         return γs_k_matrix
         # print("asymm γs: ", set((self.γs_k_matrix[0,1,:]/self.γs_k_matrix[1,0,:]).flatten()))
@@ -285,36 +298,36 @@ class Integral_Equation_Solver():
         alpha  = np.min([alpha0,  alpha0/max_change])
         return old*(1-alpha) + new*alpha
 
-    def U_s_updater(self, U_s_r_old, U_s_r_new, method='best', alpha_Picard = 0.1, alpha_oz = 0. ):
-        if len(self.U_s_k_matrix_list)<3:
-            method = 'fixed'
-        if method=='best' or alpha_oz > 0.0:
-            # U_s_r_oz =  self.FT_k_2_r_matrix(self.h_k_matrix  - self.γs_k_matrix)
-            I_plus_h_rho_inverse = self.invert_matrix(self.I[:,:,np.newaxis] + self.h_k_matrix*self.rho[:,np.newaxis,np.newaxis])
-            U_s_r_oz = self.FT_k_2_r_matrix(self.A_times_B(I_plus_h_rho_inverse, self.h_k_matrix))
-        if method=='best':
-            U_s_r = self.U_s_find_best_alpha(U_s_r_old, U_s_r_new, U_s_r_oz)
-        elif method=='fixed':
-            U_s_r = alpha_Picard*U_s_r_new + (1-alpha_Picard)*U_s_r_old
-            if alpha_oz>0.0:
-                U_s_r = alpha_oz*U_s_r_oz  + (1-alpha_oz)*U_s_r
+    # def U_s_updater(self, U_s_r_old, U_s_r_new, method='best', alpha_Picard = 0.1, alpha_oz = 0. ):
+    #     if len(self.U_s_k_matrix_list)<3:
+    #         method = 'fixed'
+    #     if method=='best' or alpha_oz > 0.0:
+    #         # U_s_r_oz =  self.FT_k_2_r_matrix(self.h_k_matrix  - self.γs_k_matrix)
+    #         I_plus_h_rho_inverse = self.invert_matrix(self.I[:,:,np.newaxis] + self.h_k_matrix*self.rho[:,np.newaxis,np.newaxis])
+    #         U_s_r_oz = self.FT_k_2_r_matrix(self.A_times_B(I_plus_h_rho_inverse, self.h_k_matrix))
+    #     if method=='best':
+    #         U_s_r = self.U_s_find_best_alpha(U_s_r_old, U_s_r_new, U_s_r_oz)
+    #     elif method=='fixed':
+    #         U_s_r = alpha_Picard*U_s_r_new + (1-alpha_Picard)*U_s_r_old
+    #         if alpha_oz>0.0:
+    #             U_s_r = alpha_oz*U_s_r_oz  + (1-alpha_oz)*U_s_r
 
-        return U_s_r
+    #     return U_s_r
 
-    def get_hnc_oz_matrix(self, U_s_k_matrix):
-        U_s_r_matrix = self.FT_k_2_r_matrix(U_s_k_matrix)
-        U_r_matrix = U_s_r_matrix - self.u_l_r_matrix
-        U_k_matrix = U_s_k_matrix - self.u_l_k_matrix
+    # def get_hnc_oz_matrix(self, U_s_k_matrix):
+    #     U_s_r_matrix = self.FT_k_2_r_matrix(U_s_k_matrix)
+    #     U_r_matrix = U_s_r_matrix - self.u_l_r_matrix
+    #     U_k_matrix = U_s_k_matrix - self.u_l_k_matrix
 
-        γs_k_matrix = self.get_γs_k_matrix(U_s_k_matrix)
-        h_k_matrix = U_s_k_matrix  + γs_k_matrix
-        h_r_matrix = self.FT_k_2_r_matrix(h_k_matrix)
+    #     γs_k_matrix = self.get_γs_k_matrix(U_s_k_matrix)
+    #     h_k_matrix = U_s_k_matrix  + γs_k_matrix
+    #     h_r_matrix = self.FT_k_2_r_matrix(h_k_matrix)
 
-        tot_eqn =  1 + h_r_matrix  - np.exp(-self.u_s_r_matrix + h_r_matrix - U_s_r_matrix )
-        tot_eqn = np.where(tot_eqn>1e4, 1e4, tot_eqn)        
-        tot_eqn = np.where(tot_eqn<-1e4, -1e4, tot_eqn)        
-        tot_eqn = np.nan_to_num(tot_eqn, nan=0, posinf=1e4, neginf=-1e4)
-        return tot_eqn
+    #     tot_eqn =  1 + h_r_matrix  - np.exp(-self.u_s_r_matrix + h_r_matrix - U_s_r_matrix )
+    #     tot_eqn = np.where(tot_eqn>1e4, 1e4, tot_eqn)        
+    #     tot_eqn = np.where(tot_eqn<-1e4, -1e4, tot_eqn)        
+    #     tot_eqn = np.nan_to_num(tot_eqn, nan=0, posinf=1e4, neginf=-1e4)
+    #     return tot_eqn
 
     def get_S_k_matrix(self, h_k_matrix):
         tot_rho = np.sum(self.rho)
@@ -323,14 +336,14 @@ class Integral_Equation_Solver():
         S_k_matrix = x_matrix[:,:,np.newaxis] + self.rho[:,np.newaxis,np.newaxis]*self.rho[np.newaxis,:,np.newaxis]/tot_rho*h_k_matrix
         return S_k_matrix
 
-    def get_all_matrices_from_csk(self, U_s_k_matrix):
-        U_k_matrix   = U_s_k_matrix - self.u_l_k_matrix 
+    def get_all_matrices_from_Usk(self, U_s_k_matrix):
+        U_k_matrix   = U_s_k_matrix + self.u_l_k_matrix 
         U_s_r_matrix = self.FT_k_2_r_matrix(U_s_k_matrix)
-        U_r_matrix   = U_s_r_matrix - self.u_l_r_matrix
+        U_r_matrix   = U_s_r_matrix + self.u_l_r_matrix
         γs_k_matrix = self.get_γs_k_matrix(U_s_k_matrix)                           # 1. U_k, u_l_k -> γ_k   (Definition)
         γs_r_matrix = self.FT_k_2_r_matrix(γs_k_matrix) # γ_k        -> γ_r   (FT)     
-        βω_r_matrix = self.u_s_r_matrix - γs_r_matrix   # potential of mean force    
-        h_r_matrix = γs_r_matrix + U_s_r_matrix
+        βω_r_matrix = self.symmetric_from_nonsymmetric(self.u_s_r_matrix - γs_r_matrix)   # potential of mean force    
+        h_r_matrix = self.symmetric_from_nonsymmetric(γs_r_matrix - self.β_list[np.newaxis,:,np.newaxis]*U_s_r_matrix) # γs_ij = h_ij - Us_ij β_j
         h_r_matrix = np.where(h_r_matrix>self.h_max, self.h_max, h_r_matrix)
         h_r_matrix = np.where(h_r_matrix<-1, -1, h_r_matrix)
         h_k_matrix = self.FT_r_2_k_matrix(h_r_matrix)
@@ -338,8 +351,8 @@ class Integral_Equation_Solver():
 
         return U_k_matrix ,U_s_r_matrix ,U_r_matrix ,γs_k_matrix ,γs_r_matrix ,βω_r_matrix ,h_r_matrix ,h_r_matrix ,h_k_matrix, S_k_matrix
     
-    def set_all_matrices_from_csk(self, U_s_k_matrix):
-        U_k_matrix ,U_s_r_matrix ,U_r_matrix ,γs_k_matrix ,γs_r_matrix ,βω_r_matrix ,h_r_matrix ,h_r_matrix ,h_k_matrix, S_k_matrix = self.get_all_matrices_from_csk(U_s_k_matrix)
+    def set_all_matrices_from_Usk(self, U_s_k_matrix):
+        U_k_matrix ,U_s_r_matrix ,U_r_matrix ,γs_k_matrix ,γs_r_matrix ,βω_r_matrix ,h_r_matrix ,h_r_matrix ,h_k_matrix, S_k_matrix = self.get_all_matrices_from_Usk(U_s_k_matrix)
         self.U_k_matrix   = U_k_matrix
         self.U_s_r_matrix = U_s_r_matrix
         self.U_r_matrix   = U_r_matrix
@@ -385,12 +398,11 @@ class Integral_Equation_Solver():
         U_r_matrix = U_s_r_matrix - self.u_l_r_matrix
         U_k_matrix = U_s_k_matrix - self.u_l_k_matrix
 
-        # U_matrix = self.rho[np.newaxis,:,np.newaxis] * U_k_matrix
         γs_k_matrix = self.get_γs_k_matrix(U_s_k_matrix)
-        h_k_matrix = U_s_k_matrix  + γs_k_matrix
+        h_k_matrix = γs_k_matrix - self.β_list[np.newaxis,:,np.newaxis]*U_s_k_matrix  
         h_r_matrix = self.FT_k_2_r_matrix(h_k_matrix)
 
-        tot_eqn =  1 + h_r_matrix  - np.exp(-self.u_s_r_matrix + h_r_matrix - U_s_r_matrix )
+        tot_eqn =  1 + h_r_matrix  - np.exp(-self.β_list[np.newaxis,:,np.newaxis]*self.u_s_r_matrix + h_r_matrix + self.β_list[np.newaxis,:,np.newaxis]* U_s_r_matrix )
         
         tot_err = np.linalg.norm(tot_eqn) /np.sqrt(self.N_bins*self.N_species**2)
 
@@ -398,72 +410,72 @@ class Integral_Equation_Solver():
 
         return tot_err
     
-    def excess_energy_density_matrix(self):
+    # def excess_energy_density_matrix(self):
 
-        u_matrix = self.u_r_matrix*self.Temp_matrix[:,:,np.newaxis]
-        g_matrix = self.h_r_matrix+1
-        rho_matrix = self.rho[:,np.newaxis]*self.rho[np.newaxis,:]
-        r = self.r_array[np.newaxis,np.newaxis,:]
-        dr = self.del_r
+    #     u_matrix = self.u_r_matrix*self.T_matrix[:,:,np.newaxis]
+    #     g_matrix = self.h_r_matrix+1
+    #     rho_matrix = self.rho[:,np.newaxis]*self.rho[np.newaxis,:]
+    #     r = self.r_array[np.newaxis,np.newaxis,:]
+    #     dr = self.del_r
         
-        u_ex_matrix = np.sum(2*π*rho_matrix[:,:,np.newaxis]*u_matrix*g_matrix*r**2*dr,axis=2)
+    #     u_ex_matrix = np.sum(2*π*rho_matrix[:,:,np.newaxis]*u_matrix*g_matrix*r**2*dr,axis=2)
 
-        return u_ex_matrix
+    #     return u_ex_matrix
 
-    def excess_pressure_matrix(self):
+    # def excess_pressure_matrix(self):
 
-        r = self.r_array[np.newaxis,np.newaxis,:]
-        dr = self.del_r
+    #     r = self.r_array[np.newaxis,np.newaxis,:]
+    #     dr = self.del_r
         
-        u_matrix = self.u_r_matrix*self.Temp_matrix[:,:,np.newaxis]
-        du_dr_matrix = np.gradient(u_matrix, self.r_array, axis=2)
+    #     u_matrix = self.u_r_matrix*self.T_matrix[:,:,np.newaxis]
+    #     du_dr_matrix = np.gradient(u_matrix, self.r_array, axis=2)
 
-        g_matrix = self.h_r_matrix+1
-        rho_matrix = self.rho[:,np.newaxis]*self.rho[np.newaxis,:]
+    #     g_matrix = self.h_r_matrix+1
+    #     rho_matrix = self.rho[:,np.newaxis]*self.rho[np.newaxis,:]
         
-        P_ex_matrix = -np.sum(2*π/3*rho_matrix[:,:,np.newaxis]*du_dr_matrix*g_matrix*r**3*dr,axis=2)
+    #     P_ex_matrix = -np.sum(2*π/3*rho_matrix[:,:,np.newaxis]*du_dr_matrix*g_matrix*r**3*dr,axis=2)
 
-        return P_ex_matrix
+    #     return P_ex_matrix
 
-    def pressure_matrix(self):
-        P_ex_matrix = self.excess_pressure_matrix()
-        P_id_matrix = np.diag(self.rho*self.Temp_list)
-        return P_ex_matrix + P_id_matrix
+    # def pressure_matrix(self):
+    #     P_ex_matrix = self.excess_pressure_matrix()
+    #     P_id_matrix = np.diag(self.rho*self.T_list)
+    #     return P_ex_matrix + P_id_matrix
 
-    def energy_density_matrix(self):
-        E_ex_matrix = self.excess_energy_density_matrix()
-        E_id_matrix = 3/2*np.diag(self.rho*self.Temp_list)
-        return E_ex_matrix + E_id_matrix
+    # def energy_density_matrix(self):
+    #     E_ex_matrix = self.excess_energy_density_matrix()
+    #     E_id_matrix = 3/2*np.diag(self.rho*self.T_list)
+    #     return E_ex_matrix + E_id_matrix
 
-    def excess_energy_density(self):
-        u_ex_matrix = self.excess_energy_density_matrix()
-        u_ex = np.sum(u_ex_matrix)
-        return u_ex
+    # def excess_energy_density(self):
+    #     u_ex_matrix = self.excess_energy_density_matrix()
+    #     u_ex = np.sum(u_ex_matrix)
+    #     return u_ex
     
-    def excess_pressure(self):
-        P_ex_matrix = self.excess_pressure_matrix()
-        P_ex = np.sum(P_ex_matrix)
-        return P_ex
+    # def excess_pressure(self):
+    #     P_ex_matrix = self.excess_pressure_matrix()
+    #     P_ex = np.sum(P_ex_matrix)
+    #     return P_ex
     
-    def ideal_pressure(self):
-        P_id = np.sum(self.rho*self.Temp_list)
-        return P_id
+    # def ideal_pressure(self):
+    #     P_id = np.sum(self.rho*self.T_list)
+    #     return P_id
     
-    def ideal_energy_density(self):
-        u_id = 3/2 * np.sum(self.rho*self.Temp_list)
-        return u_id 
+    # def ideal_energy_density(self):
+    #     u_id = 3/2 * np.sum(self.rho*self.T_list)
+    #     return u_id 
 
-    def total_energy_density(self):
-        u_ex = self.excess_energy_density()
-        u_id = self.ideal_energy_density()
+    # def total_energy_density(self):
+    #     u_ex = self.excess_energy_density()
+    #     u_id = self.ideal_energy_density()
 
-        return u_id + u_ex
+    #     return u_id + u_ex
 
-    def total_pressure(self):
-        P_ex = self.excess_pressure()
-        P_id = self.ideal_pressure()
+    # def total_pressure(self):
+    #     P_ex = self.excess_pressure()
+    #     P_id = self.ideal_pressure()
 
-        return P_id + P_ex
+    #     return P_id + P_ex
 
     def guess_U_s_k_matrix(self, U_s_k_matrix):
         if self.closure in ['HNC','hnc']:
@@ -472,30 +484,35 @@ class Integral_Equation_Solver():
             return self.guess_U_s_k_matrix_py(U_s_k_matrix)
 
     def guess_U_s_k_matrix_hnc(self, U_s_k_matrix): # HNC closure for Te!=Ti is only accurate for lower mass on right index. Meaning, of [[00,01],[10,11]] only lower triangle is accurate.
-        # Get γs from OZ solution
+        # Get γs from OZ solution. γs_ij = h_ij + Us_ij β_j 
         γs_k_matrix = self.get_γs_k_matrix(U_s_k_matrix)                           # 1. U_k, u_l_k -> γ_k   (Definition)
         γs_r_matrix = self.FT_k_2_r_matrix(γs_k_matrix) # γ_k        -> γ_r   (FT)     
 
-        h_r_matrix = -1 + np.exp(γs_r_matrix - self.u_s_r_matrix) # 2. γ_r,u_s_r  -> h_r   (HNC)   
+        h_r_matrix = -1 + np.exp(γs_r_matrix - self.β_list[np.newaxis,:,np.newaxis] * self.u_s_r_matrix) # 2. γ_r,u_s_r  -> h_r   (HNC)   
         h_r_matrix = np.where(h_r_matrix>self.h_max, self.h_max, h_r_matrix)
         h_k_matrix = self.FT_r_2_k_matrix(h_r_matrix)
         # Plug into HNC equation
 
+        # construct symmetric matrix 
+        nonsymmetric_Usr_matrix = self.T_list[np.newaxis,:,np.newaxis] * (γs_r_matrix - h_r_matrix)
+        nonsymmetric_Usk_matrix = self.FT_r_2_k_matrix(nonsymmetric_Usr_matrix) # FT
+        return self.symmetric_from_nonsymmetric(nonsymmetric_Usk_matrix)
+
+    def symmetric_from_nonsymmetric(self, nonsymmetric_matrix):
         # Get indices for forming symmetric matrix
         lower_triangle_indices = np.tril_indices(self.N_species,-1) # -1 means 1 below the diagonal 
+
         diagonal_indices = np.diag_indices(self.N_species)
 
-        # construct symmetric matrix 
-        nonsymmetric_matrix =  (h_r_matrix - γs_r_matrix)
-        new_U_s_r_matrix = np.zeros_like(self.h_r_matrix) # 3. h_r, γ_r   -> U_s_r (Ornstein-Zernicke)
+        sym_matrix = np.zeros_like(self.h_r_matrix) # 3. h_r, γ_r   -> U_s_r (Ornstein-Zernicke)
         
-        new_U_s_r_matrix[lower_triangle_indices] = nonsymmetric_matrix[lower_triangle_indices] # lower triangle
-        new_U_s_r_matrix = new_U_s_r_matrix + np.transpose(new_U_s_r_matrix, axes=(1,0,2)) # upper triangle (flips first two axes)
-        new_U_s_r_matrix[diagonal_indices] = nonsymmetric_matrix[diagonal_indices] # diagonal
-    
-        new_U_s_k_matrix = self.FT_r_2_k_matrix(new_U_s_r_matrix) # FT
+        sym_matrix[lower_triangle_indices] = nonsymmetric_matrix[lower_triangle_indices] # lower triangle
+        sym_matrix = sym_matrix + np.transpose(sym_matrix, axes=(1,0,2)) # upper triangle (flips first two axes)
+        sym_matrix[diagonal_indices] = nonsymmetric_matrix[diagonal_indices] # diagonal
         
-        return new_U_s_k_matrix
+        return sym_matrix 
+
+
 
     # def guess_U_s_k_matrix_py(self, U_s_k_matrix):
     #     γs_k_matrix = self.get_γs_k_matrix(U_s_k_matrix)                           # 1. U_k, u_l_k -> γ_k   (Definition)
@@ -518,7 +535,7 @@ class Integral_Equation_Solver():
     #         # print("U_s_k: ", x.reshape(self.N_species, self.N_species, self.N_bins))
     #         self.newton_iters +=1
     #         self.U_s_k_matrix = x.reshape(self.N_species,self.N_species,self.N_bins)
-    #         self.set_all_matrices_from_csk(self.U_s_k_matrix)
+    #         self.set_all_matrices_from_Usk(self.U_s_k_matrix)
     #         self.u_ex_list.append(self.excess_energy_density())
     #         self.h_r_matrix_list.append(self.h_r_matrix.copy())            
     #         self.U_s_k_matrix_list.append(self.U_s_k_matrix.copy())
@@ -584,7 +601,6 @@ class Integral_Equation_Solver():
         decreasing = True
         iteration = 1
         self.h_r_matrix_list, self.U_s_k_matrix_list = [], []
-        self.u_ex_list = []
         self.h_r_matrix_list.append(self.h_r_matrix.copy())            
         self.U_s_k_matrix_list.append(self.U_s_k_matrix.copy())
         initial_error = self.total_err(self.U_s_k_matrix)
@@ -601,21 +617,19 @@ class Integral_Equation_Solver():
                 print("Starting Ng loop, using best index so far: ", best_run_index)
                 self.h_r_matrix_list = self.h_r_matrix_list[:best_run_index]
                 self.U_s_k_matrix_list = self.U_s_k_matrix_list[:best_run_index]
-                self.u_ex_list = self.u_ex_list[:best_run_index]
                 self.tot_err_list = self.tot_err_list[:best_run_index]
                 iteration+=1
                 continue
             else:
                 self.U_s_k_matrix = self.Ng_U_s_k(num_to_use=iters_to_use, alpha = alpha_Ng)
 
-            self.set_all_matrices_from_csk(self.U_s_k_matrix)
+            self.set_all_matrices_from_Usk(self.U_s_k_matrix)
 
             self.h_r_matrix_list.append(self.h_r_matrix.copy())            
             self.U_s_k_matrix_list.append(self.U_s_k_matrix.copy())
             
             err_c = np.linalg.norm(old_U_s_k_matrix - self.U_s_k_matrix) / np.sqrt(self.N_bins*self.N_species**2)
-            u_ex = self.excess_energy_density()
-            self.u_ex_list.append(u_ex)
+            
 
             hnc_err = np.linalg.norm(- 1 - self.h_r_matrix   + np.exp( -self.u_r_matrix + self.h_r_matrix - self.U_r_matrix ))/np.sqrt(self.N_bins*self.N_species**2)
             actual_tot_err = self.total_err(self.U_s_k_matrix)
@@ -662,12 +676,11 @@ class Integral_Equation_Solver():
             iteration += 1
         best_run_index = np.argmin(self.tot_err_list)
         self.U_s_k_matrix = self.U_s_k_matrix_list[best_run_index]# + self.u_l_k_matrix
-        self.set_all_matrices_from_csk(self.U_s_k_matrix)
+        self.set_all_matrices_from_Usk(self.U_s_k_matrix)
         self.final_Picard_err = self.tot_err_list[best_run_index]
         
         self.h_r_matrix_list = self.h_r_matrix_list[:best_run_index+1]
         self.U_s_k_matrix_list = self.U_s_k_matrix_list[:best_run_index+1]
-        self.u_ex_list = self.u_ex_list[:best_run_index+1]
         self.tot_err_list = self.tot_err_list[:best_run_index+1]
 
         print("Exiting status {0}, reverting to best index so far: {1}".format(converged, best_run_index))
@@ -715,20 +728,20 @@ class Integral_Equation_Solver():
         self.βueff_r_matrix   = self.heff_r_matrix - self.ceff_r_matrix + self.βωeff_r_matrix
 
 
-    def SVT_matrix_eqn_at_single_k(self, h_k_matrix, U_s_k_matrix, u_l_k_matrix):
-        """
+    # def SVT_matrix_eqn_at_single_k(self, h_k_matrix, U_s_k_matrix, u_l_k_matrix):
+    #     """
         
-        """
-        U_k_matrix = U_s_k_matrix - u_l_k_matrix
-        γs_k_matrix  = h_k_matrix - U_s_k_matrix
-        V = np.diag(self.Temp_list/self.mass_list) 
-        D = self.rho[np.newaxis,:]*self.Temp_matrix/self.mass_list[:,np.newaxis] * U_k_matrix
-        E = self.rho[:,np.newaxis]*self.Temp_matrix/self.mass_list[np.newaxis,:] * U_k_matrix
-        U = - u_l_k_matrix * self.Temp_matrix/self.mass_matrix
+    #     """
+    #     U_k_matrix = U_s_k_matrix - u_l_k_matrix
+    #     γs_k_matrix  = h_k_matrix - U_s_k_matrix
+    #     V = np.diag(self.T_list/self.mass_list) 
+    #     D = self.rho[np.newaxis,:]*self.T_matrix/self.mass_list[:,np.newaxis] * U_k_matrix
+    #     E = self.rho[:,np.newaxis]*self.T_matrix/self.mass_list[np.newaxis,:] * U_k_matrix
+    #     U = - u_l_k_matrix * self.T_matrix/self.mass_matrix
         
-        LHS = (V - D) @ γs_k_matrix + γs_k_matrix @ (V - E) 
-        RHS = U + D @ U_s_k_matrix + U_s_k_matrix @ E
-        return LHS - RHS
+    #     LHS = (V - D) @ γs_k_matrix + γs_k_matrix @ (V - E) 
+    #     RHS = U + D @ U_s_k_matrix + U_s_k_matrix @ E
+    #     return LHS - RHS
 
     def get_symmetriU_from_upper(self, upper_list):
         upper_indcs = np.triu_indices(self.N_species,k=1)
@@ -768,8 +781,10 @@ class Integral_Equation_Solver():
         
 
     ############# PLOTTING #############
-    def plot_species(self, species_nums):
-        fig, axs = plt.subplots(ncols=2, nrows=2, figsize=(16,10))
+    def plot_species(self, species_nums, fig=None, ax=None):
+        if fig is None and axs is None:
+            fig, axs = plt.subplots(ncols=2, nrows=2, figsize=(16,10))
+
         self.U_r_matrix = self.FT_k_2_r_matrix(self.U_k_matrix)
         fig.suptitle("Species: " + self.name_matrix[species_nums[0]][species_nums[1]] ,fontsize=20)
         # Top Left
@@ -808,9 +823,10 @@ class Integral_Equation_Solver():
     
 
         plt.tight_layout()
-        # plt.show()
+        # #plt.show()
+        return fig, axs
 
-    def plot_convergence_uex(self):
+    def plot_convergence_uex(self, ax):
         fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(10,6))
         ax.plot(self.u_ex_list)
         ax.set_title( "Excess Potential Energy Density" ,fontsize=15)
@@ -823,10 +839,12 @@ class Integral_Equation_Solver():
 
         #axs[0,0].legend(fontsize=20)
         
-        plt.show()
+        #plt.show()
+        return fig, axs
 
-    def plot_species_convergence_g(self, n_slices=4):
-        fig, axs = plt.subplots(ncols=self.N_species, nrows=self.N_species, figsize=(10*self.N_species,6*self.N_species))
+    def plot_species_convergence_g(self, n_slices=4, fig=None, axs=None):
+        if fig is None and axs is None:
+            fig, axs = plt.subplots(ncols=self.N_species, nrows=self.N_species, figsize=(10*self.N_species,6*self.N_species))
         fig.suptitle("Radial Distribution Convergence Blue to Red" ,fontsize=20)
         if type(axs) not in [list, np.ndarray, tuple]: 
             axs=np.array([[axs]])
@@ -851,10 +869,12 @@ class Integral_Equation_Solver():
 
         #axs[0,0].legend(fontsize=20)
 
-        plt.show()
+        #plt.show()
+        return fig, axs
 
-    def plot_species_convergence_c(self, n_slices=4):
-        fig, axs = plt.subplots(ncols=self.N_species, nrows=self.N_species, figsize=(10*self.N_species,6*self.N_species))
+    def plot_species_convergence_c(self, n_slices=4, fig=None, axs=None):
+        if fig is None and axs is None:
+            fig, axs = plt.subplots(ncols=self.N_species, nrows=self.N_species, figsize=(10*self.N_species,6*self.N_species))
         fig.suptitle("Direct Correlation Function Convergence Blue to Red" ,fontsize=20)
 
         if type(axs) not in [list, np.ndarray, tuple]: 
@@ -879,10 +899,12 @@ class Integral_Equation_Solver():
 
         #axs[0,0].legend(fontsize=20)
         
-        plt.show()
+        #plt.show()
+        return fig, axs
 
-    def plot_species_convergence_ck(self, n_slices=4):
-        fig, axs = plt.subplots(ncols=self.N_species, nrows=self.N_species, figsize=(10*self.N_species,6*self.N_species))
+    def plot_species_convergence_ck(self, n_slices=4, fig=None, axs=None):
+        if fig is None and axs is None:
+            fig, axs = plt.subplots(ncols=self.N_species, nrows=self.N_species, figsize=(10*self.N_species,6*self.N_species))
         fig.suptitle("Direct Correlation Function Convergence Blue to Red" ,fontsize=20)
 
         if type(axs) not in [list, np.ndarray, tuple]: 
@@ -908,9 +930,13 @@ class Integral_Equation_Solver():
 
         #axs[0,0].legend(fontsize=20)
         
-        plt.show()
-    def plot_species_convergence_csk(self, n_slices=4):
-        fig, axs = plt.subplots(ncols=self.N_species, nrows=self.N_species, figsize=(10*self.N_species,6*self.N_species))
+        #plt.show()
+        return fig, axs
+
+    def plot_species_convergence_Usk(self, n_slices=4, fig=None, axs=None):
+        if fig is None and axs is None:
+            fig, axs = plt.subplots(ncols=self.N_species, nrows=self.N_species, figsize=(10*self.N_species,6*self.N_species))
+
         fig.suptitle("Direct Correlation Function Convergence Blue to Red" ,fontsize=20)
 
         if type(axs) not in [list, np.ndarray, tuple]: 
@@ -936,10 +962,12 @@ class Integral_Equation_Solver():
 
         #axs[0,0].legend(fontsize=20)
         
-        plt.show()
+        #plt.show()
+        return fig, axs
 
-    def plot_g_grid(self):
-        fig, axs = plt.subplots(ncols=self.N_species, nrows=self.N_species, figsize=(8*self.N_species,4*self.N_species))
+    def plot_g_grid(self, fig=None, axs=None):
+        if fig is None and axs is None:
+            fig, axs = plt.subplots(ncols=self.N_species, nrows=self.N_species, figsize=(8*self.N_species,4*self.N_species))
         fig.suptitle("Radial Distribution Function for all Species",fontsize=20,y=1)
 
         if type(axs) not in [list, np.ndarray, tuple]: 
@@ -960,10 +988,12 @@ class Integral_Equation_Solver():
             ax.tick_params(labelsize=15)
         
         plt.tight_layout(rect=[0.03, 0.03, 0.95, 0.95], pad=0.4, w_pad=5.0, h_pad=5.0)
-        plt.show()
+        #plt.show()
+        return fig, axs
 
-    def plot_g_all_species(self, data_to_compare=None, data_names=None, gmax=None):
-        fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(10,8))
+    def plot_g_all_species(self, data_to_compare=None, data_names=None, gmax=None, fig=None, ax=None):
+        if fig is None and ax is None:
+            fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(10,8))
         fig.suptitle("Radial Distribution Function for all Species", fontsize=20, y=1)
 
         for i in range(self.N_species):
@@ -1003,10 +1033,12 @@ class Integral_Equation_Solver():
         axins.set_ylabel(r"$g(r/r_s)$", fontsize=12)
         
         # plt.tight_layout()
-        plt.show()
+        #plt.show()
+        return fig, ax
     
-    def plot_ck_all_species(self, data_to_compare=None, data_names=None, gmax=None):
-        fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(10,8))
+    def plot_ck_all_species(self, data_to_compare=None, data_names=None, gmax=None, fig=None, ax=None):
+        if fig is None and ax is None:
+            fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(10,8))
         fig.suptitle("Radial Distribution Function for all Species", fontsize=20, y=1)
 
         for i in range(self.N_species):
@@ -1031,10 +1063,12 @@ class Integral_Equation_Solver():
         ax.legend(fontsize=20)
         
         plt.tight_layout()
-        plt.show()
+        #plt.show()
+        return fig, ax
 
-    def plot_csk_all_species(self, data_to_compare=None, data_names=None, gmax=None):
-        fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(10,8))
+    def plot_Usk_all_species(self, data_to_compare=None, data_names=None, gmax=None, fig=None, ax=None):
+        if fig is None and ax is None:
+            fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(10,8))
         fig.suptitle("Radial Distribution Function for all Species", fontsize=20, y=1)
 
         for i in range(self.N_species):
@@ -1059,8 +1093,8 @@ class Integral_Equation_Solver():
         ax.legend(fontsize=20)
         
         plt.tight_layout()
-        plt.show()
-
+        #plt.show()
+        return fig, ax
 
     def plot_g_vs_murillo(self, gmax=None):
         fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(8*self.N_species,4*self.N_species))
@@ -1097,10 +1131,12 @@ class Integral_Equation_Solver():
         plt.tight_layout()#rect=[0.03, 0.03, 0.95, 0.95], pad=0.4, w_pad=5.0, h_pad=5.0)
         plt.legend(fontsize=20)
         plt.grid()
-        plt.show()
+        #plt.show()
 
-    def plot_u_all_species(self):
-        fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(8,6))
+    def plot_u_all_species(self, fig=None, ax=None):
+        if fig is None and ax is None:
+            fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(8,6))
+            print("axs")
         fig.suptitle("Potential Energy between all Species",fontsize=20,y=1)
 
         for i in range(self.N_species):
@@ -1115,10 +1151,11 @@ class Integral_Equation_Solver():
         ax.set_xlim(0,10)
         ax.set_ylabel(r"$\beta u(r/r_s)$",fontsize=20)
         ax.tick_params(labelsize=15)
-        
+            
         plt.tight_layout()#rect=[0.03, 0.03, 0.95, 0.95], pad=0.4, w_pad=5.0, h_pad=5.0)
         plt.legend(fontsize=15)
-        plt.show()
+        # #plt.show()
+        return fig, ax
 
 if __name__ == "__main__":
     N_species = 3
