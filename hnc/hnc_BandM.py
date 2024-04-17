@@ -136,9 +136,7 @@ class Integral_Equation_Solver():
     def initialize_u_matrix(self, u_matrix):
         # Initialize to a Yukawa potential as a default
         if u_matrix is None:        
-            u_matrix = self.Γ_matrix[:,:,np.newaxis]/self.r_array[np.newaxis, np.newaxis,:]*np.exp(- self.κ_screen * self.r_array[np.newaxis, np.newaxis,:]) 
-        
-        # Regardless, need to set a number of arrays with this potential
+            u_matrix = self.Γ_matrix[:,:,np.newaxis]/self.r_array[np.newaxis, np.newaxis,:]*np.exp(- self.κ_screen * self.r_array[np.newaxis, np.newaxis,:])         # Regardless, need to set a number of arrays with this potential
         self.set_u_matrix(u_matrix)
             
 
@@ -275,6 +273,12 @@ class Integral_Equation_Solver():
 
         if self.N_species==1:
             A_inverse = 1/A_matrix 
+        elif self.N_species==2:
+            det = A_matrix[0,0]*A_matrix[1,1] - A_matrix[1,0]*A_matrix[0,1]
+            A_inverse[0,0] =  A_matrix[1,1]/det
+            A_inverse[0,1] = -A_matrix[0,1]/det
+            A_inverse[1,0] = -A_matrix[1,0]/det
+            A_inverse[1,1] =  A_matrix[0,0]/det
         else:
             for k_index in range(self.N_bins):
                 A_inverse[:,:, k_index] = np.linalg.inv(A_matrix[:,:,k_index])
@@ -287,6 +291,12 @@ class Integral_Equation_Solver():
         """
         if self.N_species==1:
             product = A*B
+        elif self.N_species==2:
+            product = np.zeros_like(self.h_r_matrix)
+            product[0,0] = A[0,0]*B[0,0] + A[0,1]*B[1,0]
+            product[0,1] = A[0,0]*B[0,1] + A[0,1]*B[1,1]
+            product[1,0] = A[1,0]*B[0,0] + A[1,1]*B[1,0]
+            product[1,1] = A[1,0]*B[0,1] + A[1,1]*B[1,1] 
         else:
             product = np.einsum('ikm,kjm->ijm', A, B)
         return product
@@ -295,37 +305,6 @@ class Integral_Equation_Solver():
         max_change = np.max(new/old)
         alpha  = np.min([alpha0,  alpha0/max_change])
         return old*(1-alpha) + new*alpha
-
-    # def U_s_updater(self, U_s_r_old, U_s_r_new, method='best', alpha_Picard = 0.1, alpha_oz = 0. ):
-    #     if len(self.U_s_k_matrix_list)<3:
-    #         method = 'fixed'
-    #     if method=='best' or alpha_oz > 0.0:
-    #         # U_s_r_oz =  self.FT_k_2_r_matrix(self.h_k_matrix  - self.γs_k_matrix)
-    #         I_plus_h_rho_inverse = self.invert_matrix(self.I[:,:,np.newaxis] + self.h_k_matrix*self.rho[:,np.newaxis,np.newaxis])
-    #         U_s_r_oz = self.FT_k_2_r_matrix(self.A_times_B(I_plus_h_rho_inverse, self.h_k_matrix))
-    #     if method=='best':
-    #         U_s_r = self.U_s_find_best_alpha(U_s_r_old, U_s_r_new, U_s_r_oz)
-    #     elif method=='fixed':
-    #         U_s_r = alpha_Picard*U_s_r_new + (1-alpha_Picard)*U_s_r_old
-    #         if alpha_oz>0.0:
-    #             U_s_r = alpha_oz*U_s_r_oz  + (1-alpha_oz)*U_s_r
-
-    #     return U_s_r
-
-    # def get_hnc_oz_matrix(self, U_s_k_matrix):
-    #     U_s_r_matrix = self.FT_k_2_r_matrix(U_s_k_matrix)
-    #     U_r_matrix = U_s_r_matrix - self.u_l_r_matrix
-    #     U_k_matrix = U_s_k_matrix - self.u_l_k_matrix
-
-    #     γs_k_matrix = self.get_γs_k_matrix(U_s_k_matrix)
-    #     h_k_matrix = U_s_k_matrix  + γs_k_matrix
-    #     h_r_matrix = self.FT_k_2_r_matrix(h_k_matrix)
-
-    #     tot_eqn =  1 + h_r_matrix  - np.exp(-self.u_s_r_matrix + h_r_matrix - U_s_r_matrix )
-    #     tot_eqn = np.where(tot_eqn>1e4, 1e4, tot_eqn)        
-    #     tot_eqn = np.where(tot_eqn<-1e4, -1e4, tot_eqn)        
-    #     tot_eqn = np.nan_to_num(tot_eqn, nan=0, posinf=1e4, neginf=-1e4)
-    #     return tot_eqn
 
     def get_S_k_matrix(self, h_k_matrix):
         tot_rho = np.sum(self.rho)
@@ -419,72 +398,7 @@ class Integral_Equation_Solver():
 
         return tot_err
 
-    # def excess_energy_density_matrix(self):
-
-    #     u_matrix = self.u_r_matrix*self.T_matrix[:,:,np.newaxis]
-    #     g_matrix = self.h_r_matrix+1
-    #     rho_matrix = self.rho[:,np.newaxis]*self.rho[np.newaxis,:]
-    #     r = self.r_array[np.newaxis,np.newaxis,:]
-    #     dr = self.del_r
-        
-    #     u_ex_matrix = np.sum(2*π*rho_matrix[:,:,np.newaxis]*u_matrix*g_matrix*r**2*dr,axis=2)
-
-    #     return u_ex_matrix
-
-    # def excess_pressure_matrix(self):
-
-    #     r = self.r_array[np.newaxis,np.newaxis,:]
-    #     dr = self.del_r
-        
-    #     u_matrix = self.u_r_matrix*self.T_matrix[:,:,np.newaxis]
-    #     du_dr_matrix = np.gradient(u_matrix, self.r_array, axis=2)
-
-    #     g_matrix = self.h_r_matrix+1
-    #     rho_matrix = self.rho[:,np.newaxis]*self.rho[np.newaxis,:]
-        
-    #     P_ex_matrix = -np.sum(2*π/3*rho_matrix[:,:,np.newaxis]*du_dr_matrix*g_matrix*r**3*dr,axis=2)
-
-    #     return P_ex_matrix
-
-    # def pressure_matrix(self):
-    #     P_ex_matrix = self.excess_pressure_matrix()
-    #     P_id_matrix = np.diag(self.rho*self.T_list)
-    #     return P_ex_matrix + P_id_matrix
-
-    # def energy_density_matrix(self):
-    #     E_ex_matrix = self.excess_energy_density_matrix()
-    #     E_id_matrix = 3/2*np.diag(self.rho*self.T_list)
-    #     return E_ex_matrix + E_id_matrix
-
-    # def excess_energy_density(self):
-    #     u_ex_matrix = self.excess_energy_density_matrix()
-    #     u_ex = np.sum(u_ex_matrix)
-    #     return u_ex
-    
-    # def excess_pressure(self):
-    #     P_ex_matrix = self.excess_pressure_matrix()
-    #     P_ex = np.sum(P_ex_matrix)
-    #     return P_ex
-    
-    # def ideal_pressure(self):
-    #     P_id = np.sum(self.rho*self.T_list)
-    #     return P_id
-    
-    # def ideal_energy_density(self):
-    #     u_id = 3/2 * np.sum(self.rho*self.T_list)
-    #     return u_id 
-
-    # def total_energy_density(self):
-    #     u_ex = self.excess_energy_density()
-    #     u_id = self.ideal_energy_density()
-
-    #     return u_id + u_ex
-
-    # def total_pressure(self):
-    #     P_ex = self.excess_pressure()
-    #     P_id = self.ideal_pressure()
-
-    #     return P_id + P_ex
+  
 
     def guess_U_s_k_matrix(self, U_s_k_matrix):
         if self.closure in ['HNC','hnc']:
@@ -522,69 +436,6 @@ class Integral_Equation_Solver():
         return sym_matrix 
 
 
-
-    # def guess_U_s_k_matrix_py(self, U_s_k_matrix):
-    #     γs_k_matrix = self.get_γs_k_matrix(U_s_k_matrix)                           # 1. U_k, u_l_k -> γ_k   (Definition)
-
-    #     γs_r_matrix = self.FT_k_2_r_matrix(γs_k_matrix) # γ_k        -> γ_r   (FT)     
-    #     # h_r_matrix  = np.exp(-self.u_r_matrix)*(1 + γs_r_matrix + self.u_l_r_matrix)    
-    #     # h_r_matrix  = np.where(h_r_matrix>self.h_max, self.h_max, h_r_matrix)
-    #     # h_k_matrix  = self.FT_r_2_k_matrix(h_r_matrix)
-    #     # Plug into HNC equation
-
-    #     new_U_s_r_matrix = -1 - γs_r_matrix + np.exp(-self.u_r_matrix)*(1 + γs_r_matrix)#h_r_matrix - γs_r_matrix # 3. h_r, γ_r   -> U_s_r (Ornstein-Zernicke)
-    #     new_U_s_k_matrix = self.FT_r_2_k_matrix(new_U_s_r_matrix)
-        
-    #     return new_U_s_k_matrix
-
-    # def hnc_newton_solve(self, **newton_kwargs):
-    #     self.newton_iters = 0
-    #     self.newton_succeed=False
-    #     def callback_func(x, residual):
-    #         # print("U_s_k: ", x.reshape(self.N_species, self.N_species, self.N_bins))
-    #         self.newton_iters +=1
-    #         self.U_s_k_matrix = x.reshape(self.N_species,self.N_species,self.N_bins)
-    #         self.set_all_matrices_from_Usk(self.U_s_k_matrix)
-    #         self.u_ex_list.append(self.excess_energy_density())
-    #         self.h_r_matrix_list.append(self.h_r_matrix.copy())            
-    #         self.U_s_k_matrix_list.append(self.U_s_k_matrix.copy())
-    #         residual_norm = np.linalg.norm(residual)/np.sqrt(self.N_bins*self.N_species**2)
-    #         self.tot_err_list.append(residual_norm)
-    #         change = np.linalg.norm(self.U_s_k_matrix_list[-1] - self.U_s_k_matrix_list[-2]) / np.sqrt(self.N_bins*self.N_species**2)
-            
-    #         print("Iter: {0}, Newton residual norm: {1:.3e}, Change: {2:.3e} ".format(self.newton_iters, residual_norm, change))
-            
-
-    #     def f_to_min(U_s_k_flat):
-    #         U_s_k_matrix = U_s_k_flat.reshape(self.N_species, self.N_species, self.N_bins)
-    #         matrix_to_min = self.get_hnc_oz_matrix(U_s_k_matrix)
-    #         return matrix_to_min.flatten()
-
-        
-    #     # options={'jaU_options':{'rdiff':rdiff, 'inner_m':10, 'method':'gmres','M':None} , 'maxiter':int(1e3)} 
-    #     # options={'jaU_options':{'rdiff':rdiff} , 'maxiter':int(1e3)} 
-    #     # options={'jaU_options':{'rdiff':rdiff, 'method':'gmres'} , 'maxiter':int(50)} 
-    #     # options={'maxfev':int(1e3),'maxiter':int(1e2)}
-    #     # sol = root(f_to_min, self.U_s_k_matrix, method=method, callback=callback_func, options=options, tol=1e-8)  
-    #     # sol1 = root(f_to_min, self.U_s_k_matrix, method='df-sane', callback=callback_func, tol=1e-2, options=options)  
-    #     # sol1 = root(f_to_min, self.U_s_k_matrix, method='anderson', callback=callback_func, tol=1e-2, options=options)  
-    #     # print("\ndf-sane: ", sol1.success, sol1.message)
-    #     # options={'jaU_options':{'rdiff':rdiff, 'outer_k':1} , 'maxiter':int(num_iterations)} 
-    #     # sol2 = root(f_to_min, self.U_s_k_matrix, method='krylov' , callback=callback_func, tol=tol, options=options)  
-    #     # options={'eps':1e-6,'maxfev':100,'factor':0.1,'xtol':1e-3} 
-    #     sol2 = root(f_to_min, self.U_s_k_matrix, **newton_kwargs)#method='hybr' , tol=tol, options=options)  
-
-    #     self.U_s_k_matrix = sol2.x.reshape(self.N_species, self.N_species, self.N_bins)
-    #     self.U_k_matrix = self.U_s_k_matrix - self.u_l_k_matrix
-    #     self.γs_k_matrix = self.get_γs_k_matrix(self.U_s_k_matrix)
-    #     self.γs_r_matrix = self.FT_k_2_r_matrix(self.γs_k_matrix)
-    #     self.h_r_matrix = -1 + np.exp(self.γs_r_matrix - self.u_s_r_matrix)
-    #     self.βω_r_matrix = self.u_s_r_matrix - self.γs_r_matrix   # potential of mean force
-    #     print("\nRoot Finder: ", sol2.success, sol2.message, "final err: {0:.3e}".format(self.total_err(self.U_s_k_matrix)))
-    #     if sol2.success:
-    #         self.newton_succeed=True
-    #     return sol2
-        
     # Solver
     def HNC_solve(self, num_iterations=1e3, tol=1e-6, iters_to_wait=1e2, iters_to_use=3, alpha_Ng = 1e-3 ,
         alpha_Picard = 0.1, alpha_oz = 0., iters_to_check=10 ,verbose=False, min_iters=20):
@@ -814,8 +665,6 @@ class Integral_Equation_Solver():
         for ax in axs.flatten():
             ax.tick_params(labelsize=20)
             ax.set_xscale('log')
-
-    
 
         plt.tight_layout()
         # #plt.show()
