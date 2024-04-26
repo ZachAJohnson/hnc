@@ -1,0 +1,8 @@
+# DFT transport data from TCCW2 Community Paper. NOTE NO ERROR was given for 4th value, the number below is gotten by averaging the other errors.
+κe[erg/s-cm-K]  pm_err[erg/s-cm-K]
+9e7             0.18e7
+9.5e7           0.16e7
+6.9e7           0.28e7
+8.8e7           0.202e7  
+7.7e7           0.24e7
+8.8e7           0.15e7

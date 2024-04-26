@@ -18,7 +18,7 @@ from .constants import *
 
 class Integral_Equation_Solver():
     def __init__(self, N_species, number_densities_in_rs, temperature_in_AU_list, u_matrix = None, dst_type=3, h_max=1e3,
-       Γ_matrix = None, κ_screen = None, kappa_multiscale = 1.0,  R_max=25.0, N_bins=512, names=None, closure='hnc', use_U00_closure = False):
+       Γ_matrix = None, κ_screen = None, kappa_multiscale = 1.0,  R_max=25.0, N_bins=512, names=None, closure='hnc', use_U00_closure = False, use_U00_svt_correction = False):
 
         matrify = lambda numbers: np.array(numbers).reshape(N_species,N_species) 
         vectorfy = lambda numbers: np.array(numbers).reshape(N_species)
@@ -33,6 +33,7 @@ class Integral_Equation_Solver():
         self.T_list = np.array(temperature_in_AU_list)
         self.β_list = 1/self.T_list
         self.use_U00_closure = use_U00_closure # Whether or not to insert an explicit U_00. Necessary for non-equilibrium case. 
+        self.use_U00_svt_correction = use_U00_svt_correction # We can correct the e-e term in BMOZ explicitly to get SVT.
 
         if np.all(self.T_list != self.T_list[0]):
             print("WARNING: Non-equilibrium system detected. You MUST put lowest mass particle at zero index. Currently all heavy particles need the same temperature.")
@@ -263,6 +264,38 @@ class Integral_Equation_Solver():
         
         return γs_k_matrix
         # print("asymm γs: ", set((self.γs_k_matrix[0,1,:]/self.γs_k_matrix[1,0,:]).flatten()))
+
+
+    # def get_γs_k_matrix(self, U_s_k_matrix):
+    #     """
+    #     This assumes < ne(r|{R_i})ne(r|{R_i}) > =ne(r) ne(r'), which gives the weird result that we need to multiply D_00 term by βi/βe
+
+    #     C_ij  = U_ij β_j
+    #     Cs_ij = U_ij β_j - u^L_ij β_j
+    #     D_ij  = n_i U_ij β_j *Hadarmard* [[βi/βe,1],[1,1]
+    #     E_ij  = u^L_ij β_j
+
+    #     Let γ_k = h_k + C_k, γs_k = h_k + C_k  # Which is NOT symmetric!!!
+    #     h_k   = -C (1 + D)^-1
+    #     γs_K  = h_k + Cs_k 
+    #     γs_K  = (-E + Cs_k D ) (1 + D)^-1
+    #     """ 
+    #     U_k_matrix = U_s_k_matrix + self.u_l_k_matrix
+    #     C_matrix  =                                     U_k_matrix * self.β_list[np.newaxis,:,np.newaxis] #     d_kj βj
+        
+    #     self.correct_00 = np.ones_like(self.h_r_matrix)
+    #     self.correct_00[0,0] = self.β_list[1]/self.β_list[0]
+
+    #     D_matrix  = self.correct_00 * self.rho[:,np.newaxis,np.newaxis] * U_k_matrix * self.β_list[np.newaxis,:,np.newaxis] # n_k d_kj βj *Hadarmard* [[βi/βe,1],[1,1]
+    #     E_matrix  = self.u_l_k_matrix * self.β_list[np.newaxis,:,np.newaxis]
+    #     Cs_matrix = C_matrix - E_matrix
+
+    #     denominator = self.invert_matrix(self.I[:,:,np.newaxis] + D_matrix)
+    #     numerator   = -E_matrix + self.A_times_B( Cs_matrix, D_matrix ) 
+    #     γs_k_matrix = self.A_times_B( numerator, denominator )
+        
+    #     return γs_k_matrix
+        # print("asymm γs: ", set((self.γs_k_matrix[0,1,:]/self.γs_k_matrix[1,0,:]).flatten()))
         
     # Matrix Manipulation
     def invert_matrix(self, A_matrix):
@@ -343,32 +376,32 @@ class Integral_Equation_Solver():
     def Picard_U_s_k(self, old_U_s_k_matrix, new_U_s_k_matrix, alpha=0.1 ):
         return old_U_s_k_matrix*(1-alpha) + new_U_s_k_matrix*alpha
 
-    def Ng_U_s_k(self, num_to_use=3, alpha=1e-3):
-        """
-        See Appendix of
-        "Hypernetted chain solutions for the classical one‐component plasma up to Γ=7000" - Kin‐Chue Ng
-        """
-        actual_U_s_k_n = self.U_s_k_matrix_list[-num_to_use:][::-1]# f_n of Ng  with f[0]=f_n, f[1]=f_{n-1}
-        next_U_s_k_n = np.array([ self.guess_U_s_k_matrix(U_s_k_n) for U_s_k_n in actual_U_s_k_n]) # g_n
-        # print(next_U_s_k_n.shape)
-        dn_list = next_U_s_k_n - actual_U_s_k_n # d_n = g_n-f_n , 0 iff converged
+    # def Ng_U_s_k(self, num_to_use=3, alpha=1e-3):
+    #     """
+    #     See Appendix of
+    #     "Hypernetted chain solutions for the classical one‐component plasma up to Γ=7000" - Kin‐Chue Ng
+    #     """
+    #     actual_U_s_k_n = self.U_s_k_matrix_list[-num_to_use:][::-1]# f_n of Ng  with f[0]=f_n, f[1]=f_{n-1}
+    #     next_U_s_k_n = np.array([ self.guess_U_s_k_matrix(U_s_k_n) for U_s_k_n in actual_U_s_k_n]) # g_n
+    #     # print(next_U_s_k_n.shape)
+    #     dn_list = next_U_s_k_n - actual_U_s_k_n # d_n = g_n-f_n , 0 iff converged
 
-        Δd_list = dn_list[0] - dn_list[1:] #  = [d_{01}, d_{02}, ... ]
-        Δd_flattened_list = np.array([Δd.flatten() for Δd in Δd_list]) # flatten the species matrix components
+    #     Δd_list = dn_list[0] - dn_list[1:] #  = [d_{01}, d_{02}, ... ]
+    #     Δd_flattened_list = np.array([Δd.flatten() for Δd in Δd_list]) # flatten the species matrix components
 
-        A_sum_matrix = np.sum(Δd_flattened_list[:,np.newaxis]*Δd_flattened_list[np.newaxis,:] ,axis = (2) ) # Each component (d_01, d_01),...
+    #     A_sum_matrix = np.sum(Δd_flattened_list[:,np.newaxis]*Δd_flattened_list[np.newaxis,:] ,axis = (2) ) # Each component (d_01, d_01),...
         
-        b_vec = np.sum(  dn_list[0].flatten() * Δd_flattened_list, axis=(1)  )
+    #     b_vec = np.sum(  dn_list[0].flatten() * Δd_flattened_list, axis=(1)  )
 
-        best_αs_list = np.linalg.inv(A_sum_matrix) @ b_vec # = [U_1, U_2]
+    #     best_αs_list = np.linalg.inv(A_sum_matrix) @ b_vec # = [U_1, U_2]
 
-        αs = best_αs_list
-        αs =  np.array([(1-np.sum(αs)), *αs]) # = [(1-U_1 -U_2..., U_1, U_2, ...)]
+    #     αs = best_αs_list
+    #     αs =  np.array([(1-np.sum(αs)), *αs]) # = [(1-U_1 -U_2..., U_1, U_2, ...)]
     
-        self.Ng_guess_U_s_k = np.sum(αs[:,np.newaxis,np.newaxis,np.newaxis]*next_U_s_k_n, axis=0)
-        # new_U_s_k = self.Picard_U_s_k(self.U_s_k_matrix, self.Ng_guess_U_s_k, alpha=alpha)
-        new_U_s_k = self.Ng_guess_U_s_k
-        return  new_U_s_k
+    #     self.Ng_guess_U_s_k = np.sum(αs[:,np.newaxis,np.newaxis,np.newaxis]*next_U_s_k_n, axis=0)
+    #     # new_U_s_k = self.Picard_U_s_k(self.U_s_k_matrix, self.Ng_guess_U_s_k, alpha=alpha)
+    #     new_U_s_k = self.Ng_guess_U_s_k
+    #     return  new_U_s_k
 
     def check_Usk00_closure(self, U_s_k_matrix):
         if self.use_U00_closure == True:
@@ -384,6 +417,16 @@ class Integral_Equation_Solver():
         U_k_matrix = U_s_k_matrix - self.u_l_k_matrix
 
         γs_k_matrix = self.get_γs_k_matrix(U_s_k_matrix)
+        if self.use_U00_svt_correction:
+            # γs_k_matrix[0,0] += (1 - self.β_list[1]/self.β_list[0]) * (self.rho[1]*self.U_k_matrix[1,0]**2*self.β_list[0]**2) / (1 + self.rho[0]*self.β_list[0]*self.U_k_matrix[0,0])
+            βe, βi =  self.β_list
+            u_l_ee = self.u_l_k_matrix[0,0]
+            U_ee, U_ii, U_ei = U_s_k_matrix[0,0] + self.u_l_k_matrix[0,0], U_s_k_matrix[1,1] + self.u_l_k_matrix[1,1], U_s_k_matrix[1,0] + self.u_l_k_matrix[1,0]
+            ne, ni = self.rho
+            # γs_k_matrix[0,0] = -βe*u_l_ee - ni*βi*βe*(U_ee*U_ii - βe/βi * U_ei**2* (1+ne*βi*U_ee)/(1+ne*βe*U_ee))
+            γs_k_matrix[0,0] = -βe*u_l_ee - ni*βi*βe*(U_ee*U_ii - U_ei**2)
+
+
         h_k_matrix = γs_k_matrix - self.β_list[np.newaxis,:,np.newaxis]*U_s_k_matrix  
         h_r_matrix = self.FT_k_2_r_matrix(h_k_matrix)
         tot_eqn =  1 + h_r_matrix  - np.exp(-self.β_list[np.newaxis,:,np.newaxis]*self.u_s_r_matrix + h_r_matrix + self.β_list[np.newaxis,:,np.newaxis]* U_s_r_matrix )
@@ -409,6 +452,15 @@ class Integral_Equation_Solver():
     def guess_U_s_k_matrix_hnc(self, U_s_k_matrix): # HNC closure for Te!=Ti is only accurate for lower mass on right index. Meaning, of [[00,01],[10,11]] only lower triangle is accurate.
         # Get γs from OZ solution. γs_ij = h_ij + Us_ij β_j 
         γs_k_matrix = self.get_γs_k_matrix(U_s_k_matrix)                           # 1. U_k, u_l_k -> γ_k   (Definition)
+        if self.use_U00_svt_correction:
+            # γs_k_matrix[0,0] += (1 - self.β_list[1]/self.β_list[0]) * (self.rho[1]*self.U_k_matrix[1,0]**2*self.β_list[0]**2) / (1 + self.rho[0]*self.β_list[0]*self.U_k_matrix[0,0])
+            βe, βi =  self.β_list
+            u_l_ee = self.u_l_k_matrix[0,0]
+            U_ee, U_ii, U_ei = U_s_k_matrix[0,0] + self.u_l_k_matrix[0,0], U_s_k_matrix[1,1] + self.u_l_k_matrix[1,1], U_s_k_matrix[1,0] + self.u_l_k_matrix[1,0]
+            ne, ni = self.rho
+            # γs_k_matrix[0,0] = -βe*u_l_ee - ni*βi*βe*(U_ee*U_ii - βe/βi * U_ei**2* (1+ne*βi*U_ee)/(1+ne*βe*U_ee))
+            γs_k_matrix[0,0] = -βe*u_l_ee - ni*βi*βe*(U_ee*U_ii - U_ei**2)
+
         γs_r_matrix = self.FT_k_2_r_matrix(γs_k_matrix) # γ_k        -> γ_r   (FT)     
 
         h_r_matrix = -1 + np.exp(γs_r_matrix - self.β_list[np.newaxis,:,np.newaxis] * self.u_s_r_matrix) # 2. γ_r,u_s_r  -> h_r   (HNC)   
@@ -438,7 +490,7 @@ class Integral_Equation_Solver():
 
     # Solver
     def HNC_solve(self, num_iterations=1e3, tol=1e-6, iters_to_wait=1e2, iters_to_use=3, alpha_Ng = 1e-3 ,
-        alpha_Picard = 0.1, alpha_oz = 0., iters_to_check=10 ,verbose=False, min_iters=20):
+        alpha_Picard = 0.1, alpha_oz = 0., iters_to_check=10 ,verbose=False, min_iters=20, dont_check=False):
         """ 
         Integral equation solutions for the classical electron gas 
         J. F. Springer; M. A. Pokrant; F. A. Stevens, Jr.
@@ -500,33 +552,35 @@ class Integral_Equation_Solver():
             if iteration%1==0 and verbose==True:
                 print("{0}: Change in U_r: {1:.3e}, HNC Error: {2:.3e}, Total Error: {3:.3e}".format(iteration, err_c, hnc_err, actual_tot_err))
             
-            if len(self.tot_err_list) > iters_to_check:
-                Δ_err = np.array(self.tot_err_list[-iters_to_check:-2]) - np.array(self.tot_err_list[-iters_to_check + 1:-1])
-                if all( Δ_err < 0 ):
-                    decreasing = False
-                    print("QUIT: Last {0} iterations error has been increasing".format(iters_to_check))
-                    converged=2
+            if dont_check == False:
+                if len(self.tot_err_list) > iters_to_check:
+                    Δ_err = np.array(self.tot_err_list[-iters_to_check:-2]) - np.array(self.tot_err_list[-iters_to_check + 1:-1])
+                    if all( Δ_err < 0 ):
+                        decreasing = False
+                        print("QUIT: Last {0} iterations error has been increasing".format(iters_to_check))
+                        converged=2
+                        break
+
+                if iteration >  200 and actual_tot_err > 1e2:
+                    Δ_err = np.array(self.tot_err_list[-iters_to_check:-2]) - np.array(self.tot_err_list[-iters_to_check + 1:-1])
+                    if all( Δ_err > 0 ):
+                        "do nothing"
+                    else:
+                        print("QUIT: Large Error at many iterations, and error not decreasing.")
+                        converged=3
+                        break
+                # if np.isinf(hnc_err)==True and iteration>50 :
+                #     print("QUIT: HNC error infinite.")
+                #     break
+                
+                if np.isinf(actual_tot_err)==True and iteration>min_iters :
+                    print("QUIT: Total error infinite.")
                     break
 
-            if iteration >  200 and actual_tot_err > 1e2:
-                Δ_err = np.array(self.tot_err_list[-iters_to_check:-2]) - np.array(self.tot_err_list[-iters_to_check + 1:-1])
-                if all( Δ_err > 0 ):
-                    "do nothing"
-                else:
-                    print("QUIT: Large Error at many iterations, and error not decreasing.")
-                    converged=3
+                if isnan(err_c):
+                    print("QUIT: U_r is nan.")
                     break
-            # if np.isinf(hnc_err)==True and iteration>50 :
-            #     print("QUIT: HNC error infinite.")
-            #     break
-            
-            if np.isinf(actual_tot_err)==True and iteration>min_iters :
-                print("QUIT: Total error infinite.")
-                break
 
-            if isnan(err_c):
-                print("QUIT: U_r is nan.")
-                break
             if iteration > num_iterations:
                 converged=1
                 print("Warning: hnc_solver did not converge within the specified number of iterations.")                
