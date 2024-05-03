@@ -123,8 +123,8 @@ class Integral_Equation_Solver():
     def initialize(self):
         self.h_r_matrix  = np.zeros((self.N_species, self.N_species, self.N_bins))
         self.h_k_matrix  = np.zeros_like(self.h_r_matrix)
-        self.γs_r_matrix = np.zeros_like(self.h_r_matrix)
-        self.γs_k_matrix = np.zeros_like(self.h_r_matrix)
+        self.γ_s_r_matrix = np.zeros_like(self.h_r_matrix)
+        self.γ_s_k_matrix = np.zeros_like(self.h_r_matrix)
         self.u_r_matrix = np.zeros_like(self.h_r_matrix)
         self.U_k_matrix  = np.zeros_like(self.h_r_matrix)
         self.U_s_k_matrix= np.zeros_like(self.h_r_matrix)
@@ -147,7 +147,7 @@ class Integral_Equation_Solver():
         """
         self.U_k_matrix[:,:,:] = self.u_k_matrix[:,:,:]
         self.U_r_matrix = self.FT_k_2_r_matrix(self.U_k_matrix)
-        self.U_s_k_matrix = self.U_k_matrix + self.u_l_k_matrix
+        self.U_s_k_matrix = self.U_k_matrix - self.u_l_k_matrix
         self.U_s_r_matrix = self.FT_k_2_r_matrix(self.U_s_k_matrix)
 
     # R and K space grid and Fourier Transforms
@@ -231,72 +231,7 @@ class Integral_Equation_Solver():
     #     """
     #     self.U_matrix = self.rho[np.newaxis,:,np.newaxis] * self.U_k_matrix
    
-    def set_γs_k_matrix(self):
-        """
-        invert N_species x N_species  matrix equation to get γ_k = h_k - U_k
-        Two methods implemented, normal OZ and SVT-OZ
-        """
-        self.γs_k_matrix = self.get_γs_k_matrix(self.U_s_k_matrix)
-        
-    def get_γs_k_matrix(self, U_s_k_matrix):
-        """
-        Note this does NOT do the low-mass - low-mass (e-e) term correctly! This term does not have a closure as of yet.
 
-        C_ij  = U_ij β_j
-        Cs_ij = U_ij β_j - u^L_ij β_j
-        D_ij  = n_i U_ij β_j
-        E_ij  = u^L_ij β_j
-
-        Let γ_k = h_k + C_k, γs_k = h_k + C_k  # Which is NOT symmetric!!!
-        h_k   = -C (1 + D)^-1
-        γs_K  = h_k + Cs_k 
-        γs_K  = (-E + Cs_k D ) (1 + D)^-1
-        """ 
-        U_k_matrix = U_s_k_matrix + self.u_l_k_matrix
-        C_matrix  =                                     U_k_matrix * self.β_list[np.newaxis,:,np.newaxis] #     d_kj βj
-        D_matrix  = self.rho[:,np.newaxis,np.newaxis] * U_k_matrix * self.β_list[np.newaxis,:,np.newaxis] # n_k d_kj βj
-        E_matrix  = self.u_l_k_matrix * self.β_list[np.newaxis,:,np.newaxis]
-        Cs_matrix = C_matrix - E_matrix
-
-        denominator = self.invert_matrix(self.I[:,:,np.newaxis] + D_matrix)
-        numerator   = -E_matrix + self.A_times_B( Cs_matrix, D_matrix ) 
-        γs_k_matrix = self.A_times_B( numerator, denominator )
-        
-        return γs_k_matrix
-        # print("asymm γs: ", set((self.γs_k_matrix[0,1,:]/self.γs_k_matrix[1,0,:]).flatten()))
-
-
-    # def get_γs_k_matrix(self, U_s_k_matrix):
-    #     """
-    #     This assumes < ne(r|{R_i})ne(r|{R_i}) > =ne(r) ne(r'), which gives the weird result that we need to multiply D_00 term by βi/βe
-
-    #     C_ij  = U_ij β_j
-    #     Cs_ij = U_ij β_j - u^L_ij β_j
-    #     D_ij  = n_i U_ij β_j *Hadarmard* [[βi/βe,1],[1,1]
-    #     E_ij  = u^L_ij β_j
-
-    #     Let γ_k = h_k + C_k, γs_k = h_k + C_k  # Which is NOT symmetric!!!
-    #     h_k   = -C (1 + D)^-1
-    #     γs_K  = h_k + Cs_k 
-    #     γs_K  = (-E + Cs_k D ) (1 + D)^-1
-    #     """ 
-    #     U_k_matrix = U_s_k_matrix + self.u_l_k_matrix
-    #     C_matrix  =                                     U_k_matrix * self.β_list[np.newaxis,:,np.newaxis] #     d_kj βj
-        
-    #     self.correct_00 = np.ones_like(self.h_r_matrix)
-    #     self.correct_00[0,0] = self.β_list[1]/self.β_list[0]
-
-    #     D_matrix  = self.correct_00 * self.rho[:,np.newaxis,np.newaxis] * U_k_matrix * self.β_list[np.newaxis,:,np.newaxis] # n_k d_kj βj *Hadarmard* [[βi/βe,1],[1,1]
-    #     E_matrix  = self.u_l_k_matrix * self.β_list[np.newaxis,:,np.newaxis]
-    #     Cs_matrix = C_matrix - E_matrix
-
-    #     denominator = self.invert_matrix(self.I[:,:,np.newaxis] + D_matrix)
-    #     numerator   = -E_matrix + self.A_times_B( Cs_matrix, D_matrix ) 
-    #     γs_k_matrix = self.A_times_B( numerator, denominator )
-        
-    #     return γs_k_matrix
-        # print("asymm γs: ", set((self.γs_k_matrix[0,1,:]/self.γs_k_matrix[1,0,:]).flatten()))
-        
     # Matrix Manipulation
     def invert_matrix(self, A_matrix):
         """
@@ -350,24 +285,30 @@ class Integral_Equation_Solver():
         U_k_matrix   = U_s_k_matrix + self.u_l_k_matrix 
         U_s_r_matrix = self.FT_k_2_r_matrix(U_s_k_matrix)
         U_r_matrix   = U_s_r_matrix + self.u_l_r_matrix
-        γs_k_matrix = self.get_γs_k_matrix(U_s_k_matrix)                           # 1. U_k, u_l_k -> γ_k   (Definition)
-        γs_r_matrix = self.FT_k_2_r_matrix(γs_k_matrix) # γ_k        -> γ_r   (FT)     
-        βω_r_matrix = self.symmetric_from_nonsymmetric(self.u_s_r_matrix - γs_r_matrix)   # potential of mean force    
-        h_r_matrix = self.symmetric_from_nonsymmetric(γs_r_matrix - self.β_list[np.newaxis,:,np.newaxis]*U_s_r_matrix) # γs_ij = h_ij - Us_ij β_j
+        γ_s_k_matrix = self.get_γ_s_k_matrix(U_s_k_matrix)                           # 1. U_k, u_l_k -> γ_k   (Definition)
+        γ_s_r_matrix = self.FT_k_2_r_matrix(γ_s_k_matrix) # γ_k        -> γ_r   (FT)     
+        
+        # potential of mean force    
+        T_matrix = np.ones((self.N_species,self.N_species)) / self.β_list[1]
+        T_matrix[0,0] = 1/self.β_list[0]
+        βω_r_matrix = self.u_s_r_matrix - T_matrix[:,:,np.newaxis]*γ_s_r_matrix   
+        
+        heff_r_OZ_matrix  = (γ_s_r_matrix - self.β_list[:,np.newaxis,np.newaxis] * self.β_list[np.newaxis,:,np.newaxis]*U_s_r_matrix)/self.β_list[1] # Get γs from OZ solution. γs_ij = βion h_ij + β_i Us_ij β_j 
+        h_r_matrix = self.get_h_matrix_from_heff_matrix(heff_r_OZ_matrix, k_space=False)
         h_r_matrix = np.where(h_r_matrix>self.h_max, self.h_max, h_r_matrix)
         h_r_matrix = np.where(h_r_matrix<-1, -1, h_r_matrix)
         h_k_matrix = self.FT_r_2_k_matrix(h_r_matrix)
         S_k_matrix = self.get_S_k_matrix(h_k_matrix)
 
-        return U_k_matrix ,U_s_r_matrix ,U_r_matrix ,γs_k_matrix ,γs_r_matrix ,βω_r_matrix ,h_r_matrix ,h_r_matrix ,h_k_matrix, S_k_matrix
+        return U_k_matrix ,U_s_r_matrix ,U_r_matrix ,γ_s_k_matrix ,γ_s_r_matrix ,βω_r_matrix ,h_r_matrix ,h_r_matrix ,h_k_matrix, S_k_matrix
     
     def set_all_matrices_from_Usk(self, U_s_k_matrix):
-        U_k_matrix ,U_s_r_matrix ,U_r_matrix ,γs_k_matrix ,γs_r_matrix ,βω_r_matrix ,h_r_matrix ,h_r_matrix ,h_k_matrix, S_k_matrix = self.get_all_matrices_from_Usk(U_s_k_matrix)
+        U_k_matrix ,U_s_r_matrix ,U_r_matrix ,γ_s_k_matrix ,γ_s_r_matrix ,βω_r_matrix ,h_r_matrix ,h_r_matrix ,h_k_matrix, S_k_matrix = self.get_all_matrices_from_Usk(U_s_k_matrix)
         self.U_k_matrix   = U_k_matrix
         self.U_s_r_matrix = U_s_r_matrix
         self.U_r_matrix   = U_r_matrix
-        self.γs_k_matrix  = γs_k_matrix
-        self.γs_r_matrix  = γs_r_matrix
+        self.γ_s_k_matrix  = γ_s_k_matrix
+        self.γ_s_r_matrix  = γ_s_r_matrix
         self.βω_r_matrix  = βω_r_matrix
         self.h_r_matrix   = h_r_matrix
         self.h_k_matrix   = h_k_matrix
@@ -376,32 +317,6 @@ class Integral_Equation_Solver():
     def Picard_U_s_k(self, old_U_s_k_matrix, new_U_s_k_matrix, alpha=0.1 ):
         return old_U_s_k_matrix*(1-alpha) + new_U_s_k_matrix*alpha
 
-    # def Ng_U_s_k(self, num_to_use=3, alpha=1e-3):
-    #     """
-    #     See Appendix of
-    #     "Hypernetted chain solutions for the classical one‐component plasma up to Γ=7000" - Kin‐Chue Ng
-    #     """
-    #     actual_U_s_k_n = self.U_s_k_matrix_list[-num_to_use:][::-1]# f_n of Ng  with f[0]=f_n, f[1]=f_{n-1}
-    #     next_U_s_k_n = np.array([ self.guess_U_s_k_matrix(U_s_k_n) for U_s_k_n in actual_U_s_k_n]) # g_n
-    #     # print(next_U_s_k_n.shape)
-    #     dn_list = next_U_s_k_n - actual_U_s_k_n # d_n = g_n-f_n , 0 iff converged
-
-    #     Δd_list = dn_list[0] - dn_list[1:] #  = [d_{01}, d_{02}, ... ]
-    #     Δd_flattened_list = np.array([Δd.flatten() for Δd in Δd_list]) # flatten the species matrix components
-
-    #     A_sum_matrix = np.sum(Δd_flattened_list[:,np.newaxis]*Δd_flattened_list[np.newaxis,:] ,axis = (2) ) # Each component (d_01, d_01),...
-        
-    #     b_vec = np.sum(  dn_list[0].flatten() * Δd_flattened_list, axis=(1)  )
-
-    #     best_αs_list = np.linalg.inv(A_sum_matrix) @ b_vec # = [U_1, U_2]
-
-    #     αs = best_αs_list
-    #     αs =  np.array([(1-np.sum(αs)), *αs]) # = [(1-U_1 -U_2..., U_1, U_2, ...)]
-    
-    #     self.Ng_guess_U_s_k = np.sum(αs[:,np.newaxis,np.newaxis,np.newaxis]*next_U_s_k_n, axis=0)
-    #     # new_U_s_k = self.Picard_U_s_k(self.U_s_k_matrix, self.Ng_guess_U_s_k, alpha=alpha)
-    #     new_U_s_k = self.Ng_guess_U_s_k
-    #     return  new_U_s_k
 
     def check_Usk00_closure(self, U_s_k_matrix):
         if self.use_U00_closure == True:
@@ -412,25 +327,40 @@ class Integral_Equation_Solver():
 
     def total_err(self, U_s_k_matrix, verbose=False):
         U_s_k_matrix = self.check_Usk00_closure(U_s_k_matrix) # Does nothing if not needed. Otherwise, enforces low mass closure 
-        U_s_r_matrix = self.FT_k_2_r_matrix(U_s_k_matrix)
-        U_r_matrix = U_s_r_matrix - self.u_l_r_matrix
-        U_k_matrix = U_s_k_matrix - self.u_l_k_matrix
+        γ_s_k_matrix = self.get_γ_s_k_matrix(U_s_k_matrix)  # 1. U_k, u_l_k -> γ_k   (Definition)
+        
+        heff_k_OZ_matrix  = (γ_s_k_matrix - self.β_list[:,np.newaxis,np.newaxis] * self.β_list[np.newaxis,:,np.newaxis]*U_s_k_matrix)/self.β_list[1] # Get γs from OZ solution. γs_ij = βion h_ij + β_i Us_ij β_j 
+        h_k_OZ_matrix = self.get_h_matrix_from_heff_matrix(heff_k_OZ_matrix)
+        h_k_HNC_matrix  = self.guess_h_k_matrix(γ_s_k_matrix)
 
-        γs_k_matrix = self.get_γs_k_matrix(U_s_k_matrix)
-        if self.use_U00_svt_correction:
-            # γs_k_matrix[0,0] += (1 - self.β_list[1]/self.β_list[0]) * (self.rho[1]*self.U_k_matrix[1,0]**2*self.β_list[0]**2) / (1 + self.rho[0]*self.β_list[0]*self.U_k_matrix[0,0])
-            βe, βi =  self.β_list
-            u_l_ee = self.u_l_k_matrix[0,0]
-            U_ee, U_ii, U_ei = U_s_k_matrix[0,0] + self.u_l_k_matrix[0,0], U_s_k_matrix[1,1] + self.u_l_k_matrix[1,1], U_s_k_matrix[1,0] + self.u_l_k_matrix[1,0]
-            ne, ni = self.rho
-            # γs_k_matrix[0,0] = -βe*u_l_ee - ni*βi*βe*(U_ee*U_ii - βe/βi * U_ei**2* (1+ne*βi*U_ee)/(1+ne*βe*U_ee))
-            γs_k_matrix[0,0] = -βe*u_l_ee - ni*βi*βe*(U_ee*U_ii - U_ei**2)
+        
+        # new_U_s_k_matrix = (γ_s_k_matrix - self.β_list[1]*h_k_matrix) / self.β_list[np.newaxis,:,np.newaxis]/self.β_list[:,np.newaxis,np.newaxis]
+        
 
 
-        h_k_matrix = γs_k_matrix - self.β_list[np.newaxis,:,np.newaxis]*U_s_k_matrix  
-        h_r_matrix = self.FT_k_2_r_matrix(h_k_matrix)
-        tot_eqn =  1 + h_r_matrix  - np.exp(-self.β_list[np.newaxis,:,np.newaxis]*self.u_s_r_matrix + h_r_matrix + self.β_list[np.newaxis,:,np.newaxis]* U_s_r_matrix )
-        tot_eqn = self.symmetric_from_nonsymmetric(tot_eqn)
+        # U_s_r_matrix = self.FT_k_2_r_matrix(U_s_k_matrix)
+        # U_r_matrix = U_s_r_matrix - self.u_l_r_matrix
+        # U_k_matrix = U_s_k_matrix - self.u_l_k_matrix
+
+        # γ_s_k_matrix = self.get_γ_s_k_matrix(U_s_k_matrix)
+        # if self.use_U00_svt_correction:
+        #     # γ_s_k_matrix[0,0] += (1 - self.β_list[1]/self.β_list[0]) * (self.rho[1]*self.U_k_matrix[1,0]**2*self.β_list[0]**2) / (1 + self.rho[0]*self.β_list[0]*self.U_k_matrix[0,0])
+        #     βe, βi =  self.β_list
+        #     u_l_ee = self.u_l_k_matrix[0,0]
+        #     U_ee, U_ii, U_ei = U_s_k_matrix[0,0] + self.u_l_k_matrix[0,0], U_s_k_matrix[1,1] + self.u_l_k_matrix[1,1], U_s_k_matrix[1,0] + self.u_l_k_matrix[1,0]
+        #     ne, ni = self.rho
+        #     # γ_s_k_matrix[0,0] = -βe*u_l_ee - ni*βi*βe*(U_ee*U_ii - βe/βi * U_ei**2* (1+ne*βi*U_ee)/(1+ne*βe*U_ee))
+        #     γ_s_k_matrix[0,0] = -βe*u_l_ee - ni*βi*βe*(U_ee*U_ii - U_ei**2)
+
+
+        # T_matrix = np.ones((self.N_species,self.N_species)) / self.β_list[1]
+        # T_matrix[0,0] = 1/self.β_list[0]
+        
+        # h_k_matrix = (T_matrix[:,:,np.newaxis]*γ_s_k_matrix - self.β_list[:,np.newaxis,np.newaxis] * self.β_list[np.newaxis,:,np.newaxis]*U_s_k_matrix)/self.β_list[1]
+        # h_r_matrix = self.FT_k_2_r_matrix(h_k_matrix)
+        # tot_eqn =  1 + h_r_matrix  - np.exp(-self.β_list[np.newaxis,:,np.newaxis]*self.u_s_r_matrix + h_r_matrix + self.β_list[np.newaxis,:,np.newaxis]* U_s_r_matrix )
+        tot_eqn =  h_k_OZ_matrix - h_k_HNC_matrix
+        # tot_eqn = self.symmetric_from_nonsymmetric(tot_eqn)
         if verbose == True:
             print("Species err: ", np.linalg.norm(tot_eqn, axis=(2))/np.sqrt(self.N_bins))
         if self.use_U00_closure==True:
@@ -442,36 +372,147 @@ class Integral_Equation_Solver():
         return tot_err
 
   
+    def set_γ_s_k_matrix(self):
+        """
+        invert N_species x N_species  matrix equation to get γ_k = η_k - U_k o 
+        For script h, or  η_ij = T_ion h_ij if i or j = ion. Else, unclear.
+        """
+        self.γ_s_k_matrix = self.get_γ_s_k_matrix(self.U_s_k_matrix)
+        
+    def get_γ_s_k_matrix(self, U_s_k_matrix):
+        """
+            Note this does NOT do the low-mass - low-mass (e-e) term correctly! This term does not have a closure as of yet.
 
-    def guess_U_s_k_matrix(self, U_s_k_matrix):
-        if self.closure in ['HNC','hnc']:
-            return self.guess_U_s_k_matrix_hnc(U_s_k_matrix)
-        elif self.closure in ['PY','py']:
-            return self.guess_U_s_k_matrix_py(U_s_k_matrix)
+        C_ij  = β_i U_ij β_j
+        Cs_ij = C_ij - Cl_ij
+        Cl_ij  = β_i u^L_ij β_j
+        D_ij  = n_i U_ij β_j
+        H_ij  = heff β_ion # For heff the script h in the paper/notes
 
-    def guess_U_s_k_matrix_hnc(self, U_s_k_matrix): # HNC closure for Te!=Ti is only accurate for lower mass on right index. Meaning, of [[00,01],[10,11]] only lower triangle is accurate.
-        # Get γs from OZ solution. γs_ij = h_ij + Us_ij β_j 
-        γs_k_matrix = self.get_γs_k_matrix(U_s_k_matrix)                           # 1. U_k, u_l_k -> γ_k   (Definition)
+        In terms of which we have the Boercker & More OZ equation.
+        H_ij = -C_ij - H_ik D_kj
+
+        Let γ = H + C, γs_k = H + Cs  
+        H   = -C (1 + D)^-1
+        γs  = (-Cl + Cs_k D ) (1 + D)^-1
+        """ 
+        U_s_k_matrix = self.check_Usk00_closure(U_s_k_matrix) # Does nothing if not needed. Otherwise, enforces low mass closure 
+
+        U_k_matrix = U_s_k_matrix + self.u_l_k_matrix
+        Cs_matrix  = self.β_list[:,np.newaxis,np.newaxis] * U_s_k_matrix * self.β_list[np.newaxis,:,np.newaxis] #    βi U_kj βj
+        Cl_matrix  = self.β_list[:,np.newaxis,np.newaxis] * self.u_l_k_matrix * self.β_list[np.newaxis,:,np.newaxis]  # βi u_ij βj
+        D_matrix   = self.rho[:,np.newaxis,np.newaxis]    * U_k_matrix * self.β_list[np.newaxis,:,np.newaxis] # n_k U_kj βj
+
+        denominator  = self.invert_matrix(self.I[:,:,np.newaxis] + D_matrix)
+        numerator    = -Cl_matrix + self.A_times_B( Cs_matrix, D_matrix ) 
+        γ_s_k_matrix = self.A_times_B( numerator, denominator )
+        
+        return γ_s_k_matrix
+
+ 
+    def get_heff_matrix_from_h_matrix(self, h_matrix, k_space=True):
+        """
+        For script h, or  heff_ij = h_ij if i or j = ion. 
+        Approximate by ignoring <ne ne>/nene-1 term means heff_00 = βe/βi h_ee 
+        Fully, heff_00 = βe/βi h_ee  + (1-βi/βe) f_ee for 
+            f_ee = (<ne ne>/nene-1)
+        Note, f_ee = n_i die^2 βe/(1 - ne βe dee) recovers SVT exactly!
+        Instead, f_ee = n_i die^2 βe recovers the electronic part (i-i still wrong) of MASS OZ.
+        """
+        heff_matrix = h_matrix
+        βe, βi = self.β_list[0:2] 
+        ni = self.rho[1]
+        Uei = self.U_s_k_matrix[0,1] + self.u_l_k_matrix[0,1]
+        
         if self.use_U00_svt_correction:
-            # γs_k_matrix[0,0] += (1 - self.β_list[1]/self.β_list[0]) * (self.rho[1]*self.U_k_matrix[1,0]**2*self.β_list[0]**2) / (1 + self.rho[0]*self.β_list[0]*self.U_k_matrix[0,0])
-            βe, βi =  self.β_list
-            u_l_ee = self.u_l_k_matrix[0,0]
-            U_ee, U_ii, U_ei = U_s_k_matrix[0,0] + self.u_l_k_matrix[0,0], U_s_k_matrix[1,1] + self.u_l_k_matrix[1,1], U_s_k_matrix[1,0] + self.u_l_k_matrix[1,0]
-            ne, ni = self.rho
-            # γs_k_matrix[0,0] = -βe*u_l_ee - ni*βi*βe*(U_ee*U_ii - βe/βi * U_ei**2* (1+ne*βi*U_ee)/(1+ne*βe*U_ee))
-            γs_k_matrix[0,0] = -βe*u_l_ee - ni*βi*βe*(U_ee*U_ii - U_ei**2)
+            fee_k = ni*Uei**2*βe**2
+        else:
+            fee_k = np.zeros((self.N_bins))
 
-        γs_r_matrix = self.FT_k_2_r_matrix(γs_k_matrix) # γ_k        -> γ_r   (FT)     
+        if k_space == True:
+            heff_matrix[0,0] = βe/βi * h_matrix[0,0] + (1-βi/βe)*fee_k
+        else:
+            fee_r = self.FT_k_2_r(fee_k)
+            heff_matrix[0,0] = βe/βi * h_matrix[0,0] + (1-βi/βe)*fee_r
+        return heff_matrix
 
-        h_r_matrix = -1 + np.exp(γs_r_matrix - self.β_list[np.newaxis,:,np.newaxis] * self.u_s_r_matrix) # 2. γ_r,u_s_r  -> h_r   (HNC)   
+    def get_h_matrix_from_heff_matrix(self, heff_matrix, k_space=True):
+        """
+        For script h, or  heff_ij = h_ij if i or j = ion. 
+        Approximate by ignoring <ne ne>/nene-1 term means heff_00 = βe/βi h_ee 
+        Fully, heff_00 = βe/βi h_ee  + (1-βi/βe) f_ee for 
+            f_ee = (<ne ne>/nene-1)
+        Note, f_ee = n_i die^2 βe/(1 - ne βe dee) recovers SVT exactly!
+        Instead, f_ee = n_i die^2 βe recovers the electronic part (i-i still wrong) of MASS OZ.
+
+        NEVERMIND, missing detemrinant!!!!!
+        """
+        h_matrix = heff_matrix
+        βe, βi = self.β_list[0:2] 
+        ni = self.rho[1]
+        Uei_k = self.U_s_k_matrix[0,1] + self.u_l_k_matrix[0,1]
+        
+        if self.use_U00_svt_correction:
+            fee_k = ni*Uei_k**2*βe**2
+        else:
+            fee_k = np.zeros((self.N_bins))
+
+        if k_space == True:
+            h_matrix[0,0] = βi/βe * ( heff_matrix[0,0] - (1-βi/βe)*fee_k)
+        else:
+            fee_r = self.FT_k_2_r(fee_k)
+            h_matrix[0,0] = βi/βe * ( heff_matrix[0,0] - (1-βi/βe)*fee_r)
+        return heff_matrix
+
+    def guess_h_k_matrix(self, γ_s_k_matrix):
+        if self.closure in ['HNC','hnc']:
+            return self.guess_h_k_matrix_hnc(γ_s_k_matrix)
+        elif self.closure in ['PY','py']:
+            return self.guess_h_k_matrix_py(γ_s_k_matrix)
+
+    def guess_h_k_matrix_hnc(self, γ_s_k_matrix): # HNC closure for Te!=Ti is only accurate for lower mass on right index. Meaning, of [[00,01],[10,11]] only lower triangle is accurate.
+        # Get γs from OZ solution. γs_ij = βion heff_ij + β_i Us_ij β_j
+    
+        # if self.use_U00_svt_correction:
+        #     # γ_s_k_matrix[0,0] += (1 - self.β_list[1]/self.β_list[0]) * (self.rho[1]*self.U_k_matrix[1,0]**2*self.β_list[0]**2) / (1 + self.rho[0]*self.β_list[0]*self.U_k_matrix[0,0])
+        #     βe, βi =  self.β_list
+        #     u_l_ee = self.u_l_k_matrix[0,0]
+        #     U_ee, U_ii, U_ei = U_s_k_matrix[0,0] + self.u_l_k_matrix[0,0], U_s_k_matrix[1,1] + self.u_l_k_matrix[1,1], U_s_k_matrix[1,0] + self.u_l_k_matrix[1,0]
+        #     ne, ni = self.rho
+        #     # γ_s_k_matrix[0,0] = -βe*u_l_ee - ni*βi*βe*(U_ee*U_ii - βe/βi * U_ei**2* (1+ne*βi*U_ee)/(1+ne*βe*U_ee))
+        #     γ_s_k_matrix[0,0] = -βe*u_l_ee - ni*βi*βe*(U_ee*U_ii - U_ei**2)
+        
+        γ_s_r_matrix = self.FT_k_2_r_matrix(γ_s_k_matrix) # γ_k        -> γ_r   (FT)     
+
+        T_matrix = np.ones((self.N_species,self.N_species)) / self.β_list[1] ## Ti everywhere but 00
+        T_matrix[0,0] = 1/self.β_list[0]
+
+        β_matrix = np.ones((self.N_species,self.N_species)) * self.β_list[1] # Te everywhere but 11
+        β_matrix[0,:] = self.β_list[0]
+        β_matrix[:,0] = self.β_list[0]
+
+        h_r_matrix = -1 + np.exp(T_matrix[:,:,np.newaxis]*γ_s_r_matrix - self.β_matrix[:,:,np.newaxis] * self.u_s_r_matrix) # 2. γ_r,u_s_r  -> h_r   (HNC)   
         h_r_matrix = np.where(h_r_matrix>self.h_max, self.h_max, h_r_matrix)
         h_k_matrix = self.FT_r_2_k_matrix(h_r_matrix)
+        return h_k_matrix
+
         # Plug into HNC equation
 
-        # construct symmetric matrix 
-        nonsymmetric_Usr_matrix = self.T_list[np.newaxis,:,np.newaxis] * (γs_r_matrix - h_r_matrix)
-        nonsymmetric_Usk_matrix = self.FT_r_2_k_matrix(nonsymmetric_Usr_matrix) # FT
-        return self.symmetric_from_nonsymmetric(nonsymmetric_Usk_matrix)
+        # # construct symmetric matrix 
+        
+        # nonsymmetric_Usr_matrix = self.T_list[np.newaxis,:,np.newaxis] * (γ_s_r_matrix - h_r_matrix)
+        # nonsymmetric_Usk_matrix = self.FT_r_2_k_matrix(nonsymmetric_Usr_matrix) # FT
+        # return self.symmetric_from_nonsymmetric(nonsymmetric_Usk_matrix)
+
+    def guess_U_s_k_matrix(self, U_s_k_matrix):
+        γ_s_k_matrix = self.get_γ_s_k_matrix(U_s_k_matrix)  # 1. U_k, u_l_k -> γ_k   (Definition)
+        h_k_matrix  = self.guess_h_k_matrix(γ_s_k_matrix)
+        heff_k_matrix = self.get_heff_matrix_from_h_matrix(h_k_matrix)
+        new_U_s_k_matrix = (γ_s_k_matrix - self.β_list[1]*heff_k_matrix) / self.β_list[np.newaxis,:,np.newaxis]/self.β_list[:,np.newaxis,np.newaxis] # γs_ij = βion heff_ij + β_i Us_ij β_j
+        U_s_k_matrix = self.check_Usk00_closure(U_s_k_matrix) # Does nothing if not needed. Otherwise, enforces low mass closure 
+
+        return new_U_s_k_matrix
+        
 
     def symmetric_from_nonsymmetric(self, nonsymmetric_matrix):
         # Get indices for forming symmetric matrix
@@ -517,7 +558,7 @@ class Integral_Equation_Solver():
         self.U_s_k_matrix_list.append(self.U_s_k_matrix.copy())
         initial_error = self.total_err(self.U_s_k_matrix)
         print("0: Initial condition Total Error: {1:.3e}".format(iteration, initial_error))
-        self.tot_err_list, self.hnc_err_list  = [initial_error], [0]
+        self.tot_err_list  = [initial_error]
         while converged!=0:
             old_U_s_k_matrix = self.U_s_k_matrix.copy()
             if iteration < iters_to_wait: #Picard at first
@@ -544,13 +585,10 @@ class Integral_Equation_Solver():
             
             err_c = np.linalg.norm(old_U_s_k_matrix - self.U_s_k_matrix) / np.sqrt(self.N_bins*self.N_species**2)
             
-
-            hnc_err = np.linalg.norm(- 1 - self.h_r_matrix   + np.exp( -self.u_r_matrix + self.h_r_matrix - self.U_r_matrix ))/np.sqrt(self.N_bins*self.N_species**2)
             actual_tot_err = self.total_err(self.U_s_k_matrix)
             self.tot_err_list.append(actual_tot_err)
-            self.hnc_err_list.append(hnc_err)
             if iteration%1==0 and verbose==True:
-                print("{0}: Change in U_r: {1:.3e}, HNC Error: {2:.3e}, Total Error: {3:.3e}".format(iteration, err_c, hnc_err, actual_tot_err))
+                print("{0}: Change in U_r: {1:.3e}, Total Error: {2:.3e}".format(iteration, err_c, actual_tot_err))
             
             if dont_check == False:
                 if len(self.tot_err_list) > iters_to_check:
@@ -643,7 +681,7 @@ class Integral_Equation_Solver():
         # Approximate with HNC
         self.βueff_r_matrix   = self.heff_r_matrix - self.ceff_r_matrix + self.βωeff_r_matrix
 
-    def get_symmetriU_from_upper(self, upper_list):
+    def get_symmetric_from_upper(self, upper_list):
         upper_indcs = np.triu_indices(self.N_species,k=1)
         upper_indcs_withdiag = np.triu_indices(self.N_species)
         lower_indcs = np.tril_indices(self.N_species, k=-1)
@@ -710,7 +748,7 @@ class Integral_Equation_Solver():
         # axs[1,0].set_yscale('log')#,linthresh=0.1)
         
         #Bottom Right
-        axs[1,1].plot(self.r_array, np.exp(self.γs_r_matrix + self.u_l_r_matrix)[species_nums] ,'--.')
+        axs[1,1].plot(self.r_array, np.exp(self.γ_s_r_matrix + self.u_l_r_matrix)[species_nums] ,'--.')
         axs[1,1].set_xlabel("r/r_s",fontsize=20)
         axs[1,1].set_ylabel(r"$e^\gamma(r)$",fontsize=20)
         axs[1,1].set_title(r"$n=n_{ideal}(r) e^{\gamma(r)}$",fontsize=20)
