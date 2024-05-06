@@ -293,17 +293,18 @@ class Integral_Equation_Solver():
         T_matrix[0,0] = 1/self.β_list[0]
         βω_r_matrix = self.u_s_r_matrix - T_matrix[:,:,np.newaxis]*γ_s_r_matrix   
         
-        heff_r_OZ_matrix  = (γ_s_r_matrix - self.β_list[:,np.newaxis,np.newaxis] * self.β_list[np.newaxis,:,np.newaxis]*U_s_r_matrix)/self.β_list[1] # Get γs from OZ solution. γs_ij = βion h_ij + β_i Us_ij β_j 
-        h_r_matrix = self.get_h_matrix_from_heff_matrix(heff_r_OZ_matrix, k_space=False)
+        heff_r_matrix  = self.get_heff_from_γs_Us(γ_s_r_matrix, U_s_r_matrix) # Get γs from OZ solution. γs_ij = βion h_ij + β_i Us_ij β_j 
+        heff_k_matrix = self.FT_k_2_r_matrix(heff_r_matrix)
+        h_r_matrix = self.get_h_matrix_from_heff_matrix(heff_r_matrix, k_space=False)
         h_r_matrix = np.where(h_r_matrix>self.h_max, self.h_max, h_r_matrix)
         h_r_matrix = np.where(h_r_matrix<-1, -1, h_r_matrix)
         h_k_matrix = self.FT_r_2_k_matrix(h_r_matrix)
         S_k_matrix = self.get_S_k_matrix(h_k_matrix)
 
-        return U_k_matrix ,U_s_r_matrix ,U_r_matrix ,γ_s_k_matrix ,γ_s_r_matrix ,βω_r_matrix ,h_r_matrix ,h_r_matrix ,h_k_matrix, S_k_matrix
+        return U_k_matrix ,U_s_r_matrix ,U_r_matrix ,γ_s_k_matrix ,γ_s_r_matrix ,βω_r_matrix ,h_r_matrix ,h_r_matrix ,h_k_matrix, S_k_matrix, heff_r_matrix, heff_k_matrix
     
     def set_all_matrices_from_Usk(self, U_s_k_matrix):
-        U_k_matrix ,U_s_r_matrix ,U_r_matrix ,γ_s_k_matrix ,γ_s_r_matrix ,βω_r_matrix ,h_r_matrix ,h_r_matrix ,h_k_matrix, S_k_matrix = self.get_all_matrices_from_Usk(U_s_k_matrix)
+        U_k_matrix ,U_s_r_matrix ,U_r_matrix ,γ_s_k_matrix ,γ_s_r_matrix ,βω_r_matrix ,h_r_matrix ,h_r_matrix ,h_k_matrix, S_k_matrix, heff_r_matrix, heff_k_matrix = self.get_all_matrices_from_Usk(U_s_k_matrix)
         self.U_k_matrix   = U_k_matrix
         self.U_s_r_matrix = U_s_r_matrix
         self.U_r_matrix   = U_r_matrix
@@ -313,6 +314,11 @@ class Integral_Equation_Solver():
         self.h_r_matrix   = h_r_matrix
         self.h_k_matrix   = h_k_matrix
         self.S_k_matrix   = S_k_matrix
+        self.heff_r_matrix = heff_r_matrix
+        self.heff_k_matrix = heff_k_matrix
+        
+    def get_heff_from_γs_Us(self, γ_s_matrix, U_s_matrix ):
+        return (γ_s_matrix - self.β_list[:,np.newaxis,np.newaxis] * self.β_list[np.newaxis,:,np.newaxis]*U_s_matrix)/self.β_list[1]
 
     def Picard_U_s_k(self, old_U_s_k_matrix, new_U_s_k_matrix, alpha=0.1 ):
         return old_U_s_k_matrix*(1-alpha) + new_U_s_k_matrix*alpha
@@ -325,49 +331,21 @@ class Integral_Equation_Solver():
         else:
             return U_s_k_matrix
 
+
     def total_err(self, U_s_k_matrix, verbose=False):
         U_s_k_matrix = self.check_Usk00_closure(U_s_k_matrix) # Does nothing if not needed. Otherwise, enforces low mass closure 
         γ_s_k_matrix = self.get_γ_s_k_matrix(U_s_k_matrix)  # 1. U_k, u_l_k -> γ_k   (Definition)
-        
-        heff_k_OZ_matrix  = (γ_s_k_matrix - self.β_list[:,np.newaxis,np.newaxis] * self.β_list[np.newaxis,:,np.newaxis]*U_s_k_matrix)/self.β_list[1] # Get γs from OZ solution. γs_ij = βion h_ij + β_i Us_ij β_j 
-        h_k_OZ_matrix = self.get_h_matrix_from_heff_matrix(heff_k_OZ_matrix)
         h_k_HNC_matrix  = self.guess_h_k_matrix(γ_s_k_matrix)
-
         
-        # new_U_s_k_matrix = (γ_s_k_matrix - self.β_list[1]*h_k_matrix) / self.β_list[np.newaxis,:,np.newaxis]/self.β_list[:,np.newaxis,np.newaxis]
-        
+        heff_k_OZ_matrix  = self.get_heff_from_γs_Us(γ_s_k_matrix, U_s_k_matrix ) # Get γs from OZ solution. γs_ij = βion h_ij + β_i Us_ij β_j 
+        h_k_OZ_matrix = self.get_h_matrix_from_heff_matrix(heff_k_OZ_matrix)
 
-
-        # U_s_r_matrix = self.FT_k_2_r_matrix(U_s_k_matrix)
-        # U_r_matrix = U_s_r_matrix - self.u_l_r_matrix
-        # U_k_matrix = U_s_k_matrix - self.u_l_k_matrix
-
-        # γ_s_k_matrix = self.get_γ_s_k_matrix(U_s_k_matrix)
-        # if self.use_U00_svt_correction:
-        #     # γ_s_k_matrix[0,0] += (1 - self.β_list[1]/self.β_list[0]) * (self.rho[1]*self.U_k_matrix[1,0]**2*self.β_list[0]**2) / (1 + self.rho[0]*self.β_list[0]*self.U_k_matrix[0,0])
-        #     βe, βi =  self.β_list
-        #     u_l_ee = self.u_l_k_matrix[0,0]
-        #     U_ee, U_ii, U_ei = U_s_k_matrix[0,0] + self.u_l_k_matrix[0,0], U_s_k_matrix[1,1] + self.u_l_k_matrix[1,1], U_s_k_matrix[1,0] + self.u_l_k_matrix[1,0]
-        #     ne, ni = self.rho
-        #     # γ_s_k_matrix[0,0] = -βe*u_l_ee - ni*βi*βe*(U_ee*U_ii - βe/βi * U_ei**2* (1+ne*βi*U_ee)/(1+ne*βe*U_ee))
-        #     γ_s_k_matrix[0,0] = -βe*u_l_ee - ni*βi*βe*(U_ee*U_ii - U_ei**2)
-
-
-        # T_matrix = np.ones((self.N_species,self.N_species)) / self.β_list[1]
-        # T_matrix[0,0] = 1/self.β_list[0]
-        
-        # h_k_matrix = (T_matrix[:,:,np.newaxis]*γ_s_k_matrix - self.β_list[:,np.newaxis,np.newaxis] * self.β_list[np.newaxis,:,np.newaxis]*U_s_k_matrix)/self.β_list[1]
-        # h_r_matrix = self.FT_k_2_r_matrix(h_k_matrix)
-        # tot_eqn =  1 + h_r_matrix  - np.exp(-self.β_list[np.newaxis,:,np.newaxis]*self.u_s_r_matrix + h_r_matrix + self.β_list[np.newaxis,:,np.newaxis]* U_s_r_matrix )
         tot_eqn =  h_k_OZ_matrix - h_k_HNC_matrix
-        # tot_eqn = self.symmetric_from_nonsymmetric(tot_eqn)
         if verbose == True:
             print("Species err: ", np.linalg.norm(tot_eqn, axis=(2))/np.sqrt(self.N_bins))
         if self.use_U00_closure==True:
             tot_eqn[0,0] = 0
         tot_err = np.linalg.norm(tot_eqn) /np.sqrt(self.N_bins*self.N_species**2)
-
-        #print("tot: {0:.2e} ".format(tot_err))
 
         return tot_err
 
@@ -414,55 +392,85 @@ class Integral_Equation_Solver():
         """
         For script h, or  heff_ij = h_ij if i or j = ion. 
         Approximate by ignoring <ne ne>/nene-1 term means heff_00 = βe/βi h_ee 
-        Fully, heff_00 = βe/βi h_ee  + (1-βi/βe) f_ee for 
+        Fully, heff_ee = βe/βi h_ee  + (1-βe/βi) f_ee for 
+        Or,    h_ee = βi/βe heff_ee  + (1-βi/βe) f_ee for 
             f_ee = (<ne ne>/nene-1)
         Note, f_ee = n_i die^2 βe/(1 - ne βe dee) recovers SVT exactly!
         Instead, f_ee = n_i die^2 βe recovers the electronic part (i-i still wrong) of MASS OZ.
         """
-        heff_matrix = h_matrix
+        heff_matrix = h_matrix.copy()
         βe, βi = self.β_list[0:2] 
-        ni = self.rho[1]
-        Uei = self.U_s_k_matrix[0,1] + self.u_l_k_matrix[0,1]
+        ne, ni = self.rho[0:2]
+        # Uei = self.U_s_k_matrix[0,1] + self.u_l_k_matrix[0,1]
+        # Uee = self.U_s_k_matrix[0,0] + self.u_l_k_matrix[0,0]
+        # Uii = self.U_s_k_matrix[1,1] + self.u_l_k_matrix[1,1]
+        # D = (1+ne*βe*Uee)*(1+ni*βi*Uii) - ne*ni*βe*βi*Uei**2
         
-        if self.use_U00_svt_correction:
-            fee_k = ni*Uei**2*βe**2
-        else:
-            fee_k = np.zeros((self.N_bins))
-
+        
         if k_space == True:
-            heff_matrix[0,0] = βe/βi * h_matrix[0,0] + (1-βi/βe)*fee_k
+            hei = h_matrix[0,1]
+            hii = h_matrix[1,1]
+            if self.use_U00_svt_correction:
+                fee = ni*hei**2/(1 + ni*hii)
+            else:
+                fee = np.zeros((self.N_bins))
+            self.fee_k = fee
+            self.fee_r = self.FT_k_2_r(fee)
         else:
-            fee_r = self.FT_k_2_r(fee_k)
-            heff_matrix[0,0] = βe/βi * h_matrix[0,0] + (1-βi/βe)*fee_r
+            hei = self.FT_r_2_k(h_matrix[0,1])
+            hii = self.FT_r_2_k(h_matrix[1,1])
+            if self.use_U00_svt_correction:
+                fee = ni*hei**2/(1 + ni*hii)
+            else:
+                fee = np.zeros((self.N_bins))
+            self.fee_k = fee
+            self.fee_r = self.FT_k_2_r(fee)
+            fee = self.fee_r.copy()
+
+        heff_matrix[0,0] = βe/βi * h_matrix[0,0] + (1-βe/βi)*fee
         return heff_matrix
 
     def get_h_matrix_from_heff_matrix(self, heff_matrix, k_space=True):
         """
         For script h, or  heff_ij = h_ij if i or j = ion. 
         Approximate by ignoring <ne ne>/nene-1 term means heff_00 = βe/βi h_ee 
-        Fully, heff_00 = βe/βi h_ee  + (1-βi/βe) f_ee for 
+        Fully, heff_ee = βe/βi h_ee  + (1-βe/βi) f_ee for 
+        Or,    h_ee = βi/βe heff_ee  + (1-βi/βe) f_ee for 
             f_ee = (<ne ne>/nene-1)
         Note, f_ee = n_i die^2 βe/(1 - ne βe dee) recovers SVT exactly!
         Instead, f_ee = n_i die^2 βe recovers the electronic part (i-i still wrong) of MASS OZ.
-
-        NEVERMIND, missing detemrinant!!!!!
         """
-        h_matrix = heff_matrix
+        h_matrix = heff_matrix.copy()
         βe, βi = self.β_list[0:2] 
-        ni = self.rho[1]
-        Uei_k = self.U_s_k_matrix[0,1] + self.u_l_k_matrix[0,1]
-        
-        if self.use_U00_svt_correction:
-            fee_k = ni*Uei_k**2*βe**2
-        else:
-            fee_k = np.zeros((self.N_bins))
+        ne, ni = self.rho[0:2]
+        # Uei = self.U_s_k_matrix[0,1] + self.u_l_k_matrix[0,1]
+        # Uee = self.U_s_k_matrix[0,0] + self.u_l_k_matrix[0,0]
+        # Uii = self.U_s_k_matrix[1,1] + self.u_l_k_matrix[1,1]
 
+        # D = (1+ne*βe*Uee)*(1+ni*βi*Uii) - ne*ni*βe*βi*Uei**2
+                
         if k_space == True:
-            h_matrix[0,0] = βi/βe * ( heff_matrix[0,0] - (1-βi/βe)*fee_k)
+            hei = h_matrix[0,1]
+            hii = h_matrix[1,1]
+            if self.use_U00_svt_correction:
+                fee = ni*hei**2/(1 + ni*hii)
+            else:
+                fee = np.zeros((self.N_bins))
+            self.fee_k = fee
+            self.fee_r = self.FT_k_2_r(fee)
         else:
-            fee_r = self.FT_k_2_r(fee_k)
-            h_matrix[0,0] = βi/βe * ( heff_matrix[0,0] - (1-βi/βe)*fee_r)
-        return heff_matrix
+            hei = self.FT_r_2_k(h_matrix[0,1])
+            hii = self.FT_r_2_k(h_matrix[1,1])
+            if self.use_U00_svt_correction:
+                fee = ni*hei**2/(1 + ni*hii)
+            else:
+                fee = np.zeros((self.N_bins))
+            self.fee_k = fee
+            self.fee_r = self.FT_k_2_r(fee)
+            fee = self.fee_r.copy()
+        
+        h_matrix[0,0] = βi/βe * heff_matrix[0,0] + (1-βi/βe)*fee
+        return h_matrix
 
     def guess_h_k_matrix(self, γ_s_k_matrix):
         if self.closure in ['HNC','hnc']:
@@ -473,36 +481,19 @@ class Integral_Equation_Solver():
     def guess_h_k_matrix_hnc(self, γ_s_k_matrix): # HNC closure for Te!=Ti is only accurate for lower mass on right index. Meaning, of [[00,01],[10,11]] only lower triangle is accurate.
         # Get γs from OZ solution. γs_ij = βion heff_ij + β_i Us_ij β_j
     
-        # if self.use_U00_svt_correction:
-        #     # γ_s_k_matrix[0,0] += (1 - self.β_list[1]/self.β_list[0]) * (self.rho[1]*self.U_k_matrix[1,0]**2*self.β_list[0]**2) / (1 + self.rho[0]*self.β_list[0]*self.U_k_matrix[0,0])
-        #     βe, βi =  self.β_list
-        #     u_l_ee = self.u_l_k_matrix[0,0]
-        #     U_ee, U_ii, U_ei = U_s_k_matrix[0,0] + self.u_l_k_matrix[0,0], U_s_k_matrix[1,1] + self.u_l_k_matrix[1,1], U_s_k_matrix[1,0] + self.u_l_k_matrix[1,0]
-        #     ne, ni = self.rho
-        #     # γ_s_k_matrix[0,0] = -βe*u_l_ee - ni*βi*βe*(U_ee*U_ii - βe/βi * U_ei**2* (1+ne*βi*U_ee)/(1+ne*βe*U_ee))
-        #     γ_s_k_matrix[0,0] = -βe*u_l_ee - ni*βi*βe*(U_ee*U_ii - U_ei**2)
-        
-        γ_s_r_matrix = self.FT_k_2_r_matrix(γ_s_k_matrix) # γ_k        -> γ_r   (FT)     
-
-        T_matrix = np.ones((self.N_species,self.N_species)) / self.β_list[1] ## Ti everywhere but 00
-        T_matrix[0,0] = 1/self.β_list[0]
+        heff_k_matrix = self.get_heff_from_γs_Us(γ_s_k_matrix, self.U_s_k_matrix )
+        h_k_matrix = self.get_h_matrix_from_heff_matrix(heff_k_matrix, k_space=True)
+        h_r_matrix = self.FT_k_2_r_matrix(h_k_matrix)
 
         β_matrix = np.ones((self.N_species,self.N_species)) * self.β_list[1] # Te everywhere but 11
         β_matrix[0,:] = self.β_list[0]
         β_matrix[:,0] = self.β_list[0]
 
-        h_r_matrix = -1 + np.exp(T_matrix[:,:,np.newaxis]*γ_s_r_matrix - self.β_matrix[:,:,np.newaxis] * self.u_s_r_matrix) # 2. γ_r,u_s_r  -> h_r   (HNC)   
+        h_r_matrix = -1 + np.exp(h_r_matrix + (self.U_s_r_matrix - self.u_s_r_matrix)*β_matrix[:,:,np.newaxis] ) # 2. γ_r,u_s_r  -> h_r   (HNC)   
         h_r_matrix = np.where(h_r_matrix>self.h_max, self.h_max, h_r_matrix)
         h_k_matrix = self.FT_r_2_k_matrix(h_r_matrix)
         return h_k_matrix
 
-        # Plug into HNC equation
-
-        # # construct symmetric matrix 
-        
-        # nonsymmetric_Usr_matrix = self.T_list[np.newaxis,:,np.newaxis] * (γ_s_r_matrix - h_r_matrix)
-        # nonsymmetric_Usk_matrix = self.FT_r_2_k_matrix(nonsymmetric_Usr_matrix) # FT
-        # return self.symmetric_from_nonsymmetric(nonsymmetric_Usk_matrix)
 
     def guess_U_s_k_matrix(self, U_s_k_matrix):
         γ_s_k_matrix = self.get_γ_s_k_matrix(U_s_k_matrix)  # 1. U_k, u_l_k -> γ_k   (Definition)
@@ -512,21 +503,6 @@ class Integral_Equation_Solver():
         U_s_k_matrix = self.check_Usk00_closure(U_s_k_matrix) # Does nothing if not needed. Otherwise, enforces low mass closure 
 
         return new_U_s_k_matrix
-        
-
-    def symmetric_from_nonsymmetric(self, nonsymmetric_matrix):
-        # Get indices for forming symmetric matrix
-        lower_triangle_indices = np.tril_indices(self.N_species,-1) # -1 means 1 below the diagonal 
-
-        diagonal_indices = np.diag_indices(self.N_species)
-
-        sym_matrix = np.zeros_like(self.h_r_matrix) # 3. h_r, γ_r   -> U_s_r (Ornstein-Zernicke)
-        
-        sym_matrix[lower_triangle_indices] = nonsymmetric_matrix[lower_triangle_indices] # lower triangle
-        sym_matrix = sym_matrix + np.transpose(sym_matrix, axes=(1,0,2)) # upper triangle (flips first two axes)
-        sym_matrix[diagonal_indices] = nonsymmetric_matrix[diagonal_indices] # diagonal
-        
-        return sym_matrix 
 
 
     # Solver
