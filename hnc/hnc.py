@@ -18,7 +18,7 @@ from .constants import *
 
 class Integral_Equation_Solver():
     def __init__(self, N_species, Γ_matrix, number_densities_in_rs, temperature_in_AU_matrix, masses, dst_type=3, h_max=1e3, oz_method='standard',
-        kappa = None, kappa_multiscale = 1.0,  R_max=25.0, N_bins=512, names=None, closure='hnc'):
+        kappa = None, kappa_multiscale = 1.0,  R_max=25.0, N_bins=512, names=None, closure='hnc', bridge=None):
 
         matrify = lambda numbers: np.array(numbers).reshape(N_species,N_species) 
         vectorfy = lambda numbers: np.array(numbers).reshape(N_species)
@@ -40,6 +40,8 @@ class Integral_Equation_Solver():
             self.kappa = np.ones_like(self.Γ_matrix)
         else: 
             self.kappa = matrify(kappa)
+        
+        self.bridge = bridge # None, 'ocp' or 'yukawa'
 
         self.I = np.eye(N_species)
         self.closure = closure # py or hnc
@@ -119,6 +121,7 @@ class Integral_Equation_Solver():
         self.c_s_k_matrix= np.zeros_like(self.h_r_matrix)
         self.c_s_r_matrix= np.zeros_like(self.h_r_matrix)
 
+        self.initialize_βu_Yukawa()
         self.initialize_βu_matrix()
         self.initialize_c_k()
         self.set_C_matrix()
@@ -136,9 +139,12 @@ class Integral_Equation_Solver():
         self.c_s_k_matrix = self.c_k_matrix + self.βu_l_k_matrix
         self.c_s_r_matrix = self.FT_k_2_r_matrix(self.c_s_k_matrix)
 
+    def initialize_βu_Yukawa(self):
+        self.βu_Yukawa = self.Γ_matrix[:,:,np.newaxis]/self.r_array[np.newaxis, np.newaxis,:]*np.exp(- self.kappa[:,:,np.newaxis] * self.r_array[np.newaxis, np.newaxis,:])
+
     def initialize_βu_matrix(self):
         # Initialize to a Yukawa potential as a default
-        self.set_βu_matrix(self.Γ_matrix[:,:,np.newaxis]/self.r_array[np.newaxis, np.newaxis,:]*np.exp(- self.kappa[:,:,np.newaxis] * self.r_array[np.newaxis, np.newaxis,:]) )
+        self.set_βu_matrix(self.βu_Yukawa)
 
     def initialize_c_k(self):
         self.c_k_matrix[:,:,:] = -self.βu_k_matrix[:,:,:]
@@ -202,12 +208,20 @@ class Integral_Equation_Solver():
 
     # Setters  
     def set_βu_matrix(self, βu_matrix):
+        βu_matrix = self.add_bridge_to_βu(βu_matrix)
         self.βu_r_matrix = βu_matrix
         self.split_βu_matrix()
         self.set_βu_k_matrices()
         self.initialize_c_k()
         self.set_C_matrix()
 
+    def add_bridge_to_βu(self, βu_matrix):
+        if self.bridge is None:
+            return βu_matrix
+        elif self.bridge=='ocp':
+            return βu_matrix - self.Bridge_function_OCP(self.r_array, self.Γ_matrix)
+        elif self.bridge=='yukawa':
+            return βu_matrix - self.Bridge_function_Yukawa(self.r_array, self.Γ_matrix, self.kappa)
 
     def split_βu_matrix(self):
         """
@@ -576,7 +590,7 @@ class Integral_Equation_Solver():
         return sol2
         
     # Solver
-    def HNC_solve(self, num_iterations=1e3, tol=1e-6, iters_to_wait=1e2, iters_to_use=3, alpha_Ng = 1e-3 ,
+    def HNC_solve(self, num_iterations=1e3, tol=1e-6, iters_to_wait=1e9, iters_to_use=3, alpha_Ng = 1e-3 ,
         alpha_Picard = 0.1, alpha_oz = 0., iters_to_check=10 ,verbose=False, min_iters=20):
         """ 
         Integral equation solutions for the classical electron gas 
@@ -728,7 +742,14 @@ class Integral_Equation_Solver():
         self.ceff_r_matrix = self.FT_k_2_r_matrix(self.ceff_k_matrix)
 
         # Approximate with HNC
-        self.βueff_r_matrix   = self.heff_r_matrix - self.ceff_r_matrix + self.βωeff_r_matrix
+        if self.bridge is None:
+            B = 0
+        elif self.bridge=='ocp':
+            B = self.Bridge_function_OCP(self.r_array, self.Γ_matrix)
+        elif self.bridge=='yukawa':
+            B = self.Bridge_function_Yukawa(self.r_array, self.Γ_matrix, self.kappa)
+
+        self.βueff_r_matrix   = self.heff_r_matrix - self.ceff_r_matrix + self.βωeff_r_matrix + B # exp(-βu + h - c + B)
 
 
     def SVT_matrix_eqn_at_single_k(self, h_k_matrix, c_s_k_matrix, βu_l_k_matrix):
