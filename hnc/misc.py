@@ -82,7 +82,7 @@ def E_Ideal_Fermi_Gas(Te, ne):
     return E
 
 
-def ThomasFermiZbar( Z, n_cc, T_eV):
+def ThomasFermiZbar( Z, n_AU, T_AU):
         """
         Finite Temperature Thomas Fermi Charge State using 
         R.M. More, "Pressure Ionization, Resonances, and the
@@ -90,8 +90,8 @@ def ThomasFermiZbar( Z, n_cc, T_eV):
         Mol. Phys., Vol. 21, p. 332 (Table IV).
 
         Z = atomic number
-        num_density = number density (1/cc)
-        T = temperature (eV)
+        n_AU = number density AU
+        T = temperature AU
         """
 
         alpha = 14.3139
@@ -106,7 +106,10 @@ def ThomasFermiZbar( Z, n_cc, T_eV):
         c1 = -0.366667
         c2 = 0.983333
 
-        convert = n_cc*1.6726e-24
+        n_cc = n_AU * AU_to_invcc
+        T_eV = T_AU * AU_to_eV
+
+        convert = n_cc*1.6726219e-24
         R = convert/Z
         T0 = T_eV/Z**(4./3.)
         Tf = T0/(1 + T0)
@@ -118,4 +121,3 @@ def ThomasFermiZbar( Z, n_cc, T_eV):
         x = alpha*Q**beta
 
         return Z*x/(1 + x + np.sqrt(1 + 2.*x))
-        
