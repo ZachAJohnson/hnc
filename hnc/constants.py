@@ -19,6 +19,7 @@ K_to_eV = 1/eV_to_K
 J_to_erg = 1e7
 AU_to_amu = 1.007276466812/m_p # 1/12 of carbon mass
 AU_to_eV = 1/eV_to_AU
+AU_to_Ry = 2
 AU_to_J = 4.359744e-18
 AU_to_erg = AU_to_J*J_to_erg
 AU_to_Pa = AU_to_J / aB**3 
@@ -40,6 +41,7 @@ AU_to_Siemens = 1/AU_to_Ohms
 
 amu_to_AU = 1/AU_to_amu
 eV_to_AU   = 1/AU_to_eV
+Ry_to_AU = 1/AU_to_Ry
 J_to_AU   = 1/AU_to_J
 erg_to_AU   = 1/AU_to_erg
 Pa_to_AU   = 1/AU_to_Pa
