@@ -82,7 +82,7 @@ def E_Ideal_Fermi_Gas(Te, ne):
     return E
 
 
-def ThomasFermiZbar( Z, n_AU, T_AU):
+def More_TF_Zbar( Z, n_AU, T_AU):
         """
         Finite Temperature Thomas Fermi Charge State using 
         R.M. More, "Pressure Ionization, Resonances, and the
