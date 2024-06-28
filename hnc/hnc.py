@@ -158,9 +158,7 @@ class Integral_Equation_Solver():
         
         if  self.dst_type==1: 
             self.r_array = np.linspace(0, self.R_max, num=self.N_bins+1)[1:]
-            self.del_r = self.r_array[1]-self.r_array[0]
             self.k_array = np.array([π*(l+1)/self.R_max for l in range(self.N_bins)] ) #Type 1
-            self.del_k = self.k_array[1]-self.k_array[0] 
         elif self.dst_type==2:
             self.r_array = np.linspace(0, self.R_max, num=self.N_bins+1)[1:]
             self.del_r = self.r_array[1]-self.r_array[0]
