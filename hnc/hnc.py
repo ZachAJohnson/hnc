@@ -206,7 +206,7 @@ class Integral_Equation_Solver():
 
     # Setters  
     def set_βu_matrix(self, βu_matrix):
-        βu_matrix = self.add_bridge_to_βu(βu_matrix)
+        self.add_bridge_to_βu(βu_matrix)
         self.βu_r_matrix = βu_matrix
         self.split_βu_matrix()
         self.set_βu_k_matrices()
@@ -214,12 +214,14 @@ class Integral_Equation_Solver():
         self.set_C_matrix()
 
     def add_bridge_to_βu(self, βu_matrix):
+        self.βu_r_matrix_no_bridge = βu_matrix
         if self.bridge is None:
-            return βu_matrix
+            self.B_matrix = np.zeros_like(βu_matrix)
         elif self.bridge=='ocp':
-            return βu_matrix - self.Bridge_function_OCP(self.r_array, self.Γ_matrix)
+            self.B_matrix = self.Bridge_function_OCP(self.r_array, self.Γ_matrix)
         elif self.bridge=='yukawa':
-            return βu_matrix - self.Bridge_function_Yukawa(self.r_array, self.Γ_matrix, self.kappa)
+            self.B_matrix = self.Bridge_function_Yukawa(self.r_array, self.Γ_matrix, self.kappa)
+        return βu_matrix - self.B_matrix
 
     def split_βu_matrix(self):
         """
@@ -440,7 +442,7 @@ class Integral_Equation_Solver():
 
     def excess_energy_density_matrix(self):
 
-        u_matrix = self.βu_r_matrix*self.Temp_matrix[:,:,np.newaxis]
+        u_matrix = self.βu_r_matrix_no_bridge*self.Temp_matrix[:,:,np.newaxis]
         g_matrix = self.h_r_matrix+1
         rho_matrix = self.rho[:,np.newaxis]*self.rho[np.newaxis,:]
         r = self.r_array[np.newaxis,np.newaxis,:]
@@ -455,7 +457,7 @@ class Integral_Equation_Solver():
         r = self.r_array[np.newaxis,np.newaxis,:]
         dr = self.del_r
         
-        u_matrix = self.βu_r_matrix*self.Temp_matrix[:,:,np.newaxis]
+        u_matrix = self.βu_r_matrix_no_bridge*self.Temp_matrix[:,:,np.newaxis]
         du_dr_matrix = np.gradient(u_matrix, self.r_array, axis=2)
 
         g_matrix = self.h_r_matrix+1
