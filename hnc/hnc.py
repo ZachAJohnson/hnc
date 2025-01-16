@@ -37,7 +37,7 @@ class Integral_Equation_Solver():
         self.Temp_list = np.diag(self.Temp_matrix)
         self.mass_matrix = (self.mass_list[:,np.newaxis]*self.mass_list[np.newaxis,:])/(self.mass_list[:,np.newaxis] + self.mass_list[np.newaxis,:])
         if kappa is None:
-            self.kappa = np.ones_like(self.Γ_matrix)
+            self.kappa = np.zeros_like(self.Γ_matrix)
         else: 
             self.kappa = matrify(kappa)
         
