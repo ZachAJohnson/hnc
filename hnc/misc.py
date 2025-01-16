@@ -1,5 +1,5 @@
 from scipy.optimize import root
-from atomic_forces.atomOFDFT.python.physics import ThomasFermi, FermiDirac
+# from atomic_forces.atomOFDFT.python.physics import ThomasFermi, FermiDirac
 
 import numpy as np
 from .constants import *
@@ -50,36 +50,36 @@ def rs_from_n(n):
     """
     return (4/3*π*n)**(-1/3)
 
-def find_η(Te, ne):
-    """
-    Gets chemical potential in [AU] that gives density ne at temperature Te
-    """
-    f_to_min = lambda η: ThomasFermi.n_TF(Te, η)-ne # η = βμ in ideal gas, no potential case
+# def find_η(Te, ne):
+#     """
+#     Gets chemical potential in [AU] that gives density ne at temperature Te
+#     """
+#     f_to_min = lambda η: ThomasFermi.n_TF(Te, η)-ne # η = βμ in ideal gas, no potential case
     
-    root_and_info = root(f_to_min, 0.4,tol=1e-4)
+#     root_and_info = root(f_to_min, 0.4,tol=1e-4)
 
-    η = root_and_info['x'][0]
-    return η
+#     η = root_and_info['x'][0]
+#     return η
 
-def P_Ideal_Fermi_Gas(Te, ne):
-    """
-    Gets the noninteracting pressure in AU.
-    """
-    η = find_η(Te, ne)
-    Ithreehalf = FermiDirac.Ithreehalf(η)
-    Θ = Degeneracy_Parameter(Te, ne)
-    P = Te * ne * Θ**(3/2) * Ithreehalf # Goes to 2/5 EF ne
-    return P
+# def P_Ideal_Fermi_Gas(Te, ne):
+#     """
+#     Gets the noninteracting pressure in AU.
+#     """
+#     η = find_η(Te, ne)
+#     Ithreehalf = FermiDirac.Ithreehalf(η)
+#     Θ = Degeneracy_Parameter(Te, ne)
+#     P = Te * ne * Θ**(3/2) * Ithreehalf # Goes to 2/5 EF ne
+#     return P
 
-def E_Ideal_Fermi_Gas(Te, ne):
-    """
-    Gets the noninteracting pressure in AU.
-    """
-    η = find_η(Te, ne)
-    Ithreehalf = FermiDirac.Ithreehalf(η)
-    Θ = Degeneracy_Parameter(Te, ne)
-    E = 3/2 * Te * Θ**(3/2) * Ithreehalf # Goes to 3/5 EF
-    return E
+# def E_Ideal_Fermi_Gas(Te, ne):
+#     """
+#     Gets the noninteracting pressure in AU.
+#     """
+#     η = find_η(Te, ne)
+#     Ithreehalf = FermiDirac.Ithreehalf(η)
+#     Θ = Degeneracy_Parameter(Te, ne)
+#     E = 3/2 * Te * Θ**(3/2) * Ithreehalf # Goes to 3/5 EF
+#     return E
 
 
 def More_TF_Zbar( Z, n_AU, T_AU):
