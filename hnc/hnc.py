@@ -422,17 +422,17 @@ class Integral_Equation_Solver():
         return  new_c_s_k
 
     def total_err(self, c_s_k_matrix):
-        c_s_r_matrix = self.FT_k_2_r_matrix(c_s_k_matrix)
-        c_r_matrix = c_s_r_matrix - self.βu_l_r_matrix
-        c_k_matrix = c_s_k_matrix - self.βu_l_k_matrix
+        # c_s_r_matrix = self.FT_k_2_r_matrix(c_s_k_matrix)
+        # c_r_matrix = c_s_r_matrix - self.βu_l_r_matrix
+        # c_k_matrix = c_s_k_matrix - self.βu_l_k_matrix
 
-        # C_matrix = self.rho[np.newaxis,:,np.newaxis] * c_k_matrix
-        γs_k_matrix = self.get_γs_k_matrix(c_s_k_matrix)
-        h_k_matrix = c_s_k_matrix  + γs_k_matrix
-        h_r_matrix = self.FT_k_2_r_matrix(h_k_matrix)
+        # # C_matrix = self.rho[np.newaxis,:,np.newaxis] * c_k_matrix
+        # γs_k_matrix = self.get_γs_k_matrix(c_s_k_matrix)
+        # h_k_matrix = c_s_k_matrix  + γs_k_matrix
+        # h_r_matrix = self.FT_k_2_r_matrix(h_k_matrix)
 
-        tot_eqn =  1 + h_r_matrix  - np.exp(-self.βu_s_r_matrix + h_r_matrix - c_s_r_matrix )
-        
+        # tot_eqn =  1 + h_r_matrix  - np.exp(-self.βu_s_r_matrix + h_r_matrix - c_s_r_matrix )
+        tot_eqn = c_s_k_matrix - self.guess_c_s_k_matrix(c_s_k_matrix)
         tot_err = np.linalg.norm(tot_eqn) /np.sqrt(self.N_bins*self.N_species**2)
 
         #print("tot: {0:.2e} ".format(tot_err))
