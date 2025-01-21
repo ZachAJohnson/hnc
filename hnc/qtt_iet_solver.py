@@ -85,7 +85,9 @@ class Homogeneous_IET_QTT():
 	def picard(self, old, new, α):
 		return (new*α + (1-α)*old).round(eps=self.eps)
 
-	def solve_OZ(self, h_r_qtt, c_r_qtt, num_iterations=10000, mixing_α=0.01, verbose=True):
+	def solve_OZ(self, h_r_qtt, c_r_qtt, num_iterations=10000, tol=None, mixing_α=0.01, verbose=True):
+		if tol is None:
+			tol=self.eps
 		h_grid = binarytensor_to_tensor(h_r_qtt.full())
 		t0 = time()
 		t_array = [0]
@@ -108,3 +110,6 @@ class Homogeneous_IET_QTT():
 				print(f"\tMin h= {np.min(h_r_qtt.full())}")
 				print("\th Ranks:", h_r_qtt.r)
 				print("\th Core Sizes:", [np.size(core) for core in ttpy.vector.to_list(h_r_qtt)])
+			if res_c<tol and res_h<tol:
+				print("Tol reached, BREAK.")
+				break 
