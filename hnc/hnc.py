@@ -398,7 +398,7 @@ class Integral_Equation_Solver():
         """
         See Appendix of
         "Hypernetted chain solutions for the classical one‐component plasma up to Γ=7000" - Kin‐Chue Ng
-        """
+        """ 
         actual_c_s_k_n = self.c_s_k_matrix_list[-num_to_use:][::-1]# f_n of Ng  with f[0]=f_n, f[1]=f_{n-1}
         next_c_s_k_n = np.array([ self.guess_c_s_k_matrix(c_s_k_n) for c_s_k_n in actual_c_s_k_n]) # g_n
         # print(next_c_s_k_n.shape)
